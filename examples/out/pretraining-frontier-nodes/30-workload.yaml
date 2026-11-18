@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pretraining-frontier-nodes
+  namespace: research
+spec:
+  clusterIP: None
+  selector:
+    job-name: pretraining-frontier-nodes
+  ports:
+  - name: rendezvous
+    port: 29500
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pretraining-frontier-nodes
+  namespace: research
+  labels:
+    team: frontier
+spec:
+  completionMode: Indexed
+  completions: 4
+  parallelism: 4
+  backoffLimitPerIndex: 0
+  maxFailedIndexes: 0
+  podFailurePolicy:
+    rules:
+    - action: Ignore
+      onPodConditions:
+      - type: DisruptionTarget
+        status: 'True'
+  template:
+    metadata:
+      labels:
+        app: pretraining-frontier-nodes
+        scheduling.x-k8s.io/pod-group: pretraining-frontier-nodes
+    spec:
+      priorityClassName: research-high
+      containers:
+      - name: main
+        image: ghcr.io/example/trainer:latest
+        resources:
+          requests:
+            cpu: '96'
+            memory: 800Gi
+            nvidia.com/gpu: 8
+          limits:
+            memory: 800Gi
+            nvidia.com/gpu: 8
+        env:
+        - name: WORLD_SIZE
+          value: '4'
+        - name: MASTER_ADDR
+          value: pretraining-frontier-nodes-0.pretraining-frontier-nodes
+        - name: MASTER_PORT
+          value: '29500'
+        ports:
+        - containerPort: 29500
+          name: rendezvous
+        volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+      nodeSelector:
+        nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      schedulerName: gang-scheduler
+      volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 64Gi
+      restartPolicy: Never
+      subdomain: pretraining-frontier-nodes

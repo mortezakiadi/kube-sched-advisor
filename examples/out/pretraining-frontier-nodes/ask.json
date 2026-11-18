@@ -1,0 +1,19 @@
+{
+  "name": "pretraining-frontier-nodes",
+  "kind": "training",
+  "replicas": 4,
+  "gpus_per_pod": 8,
+  "cpu_per_pod": 96.0,
+  "memory_gib_per_pod": 800.0,
+  "gpu_model": "H100",
+  "namespace": "research",
+  "team": "frontier",
+  "priority": "high",
+  "gang": true,
+  "needs_fast_interconnect": true,
+  "spread_across_zones": false,
+  "spot_ok": false,
+  "image": "ghcr.io/example/trainer:latest",
+  "queue_fair_share": false,
+  "raw_text": "Pretraining run for the frontier team: 4 nodes with 8 H100 GPUs per node, FSDP with NCCL allreduce, needs NVLink/InfiniBand, deadline Friday"
+}

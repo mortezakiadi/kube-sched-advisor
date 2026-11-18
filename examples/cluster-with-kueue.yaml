@@ -1,0 +1,49 @@
+# A 12-node research cluster, like the "0/12 nodes are available" scenario.
+# 8 H100 nodes in two network blocks (partially used => fragmented), 2 A100, 2 CPU.
+managed: eks
+k8s_version: "1.34"
+installed: [kueue, jobset]
+interconnect_label: network.topology/block
+nodes:
+  - name: h100-a
+    count: 4
+    allocatable: {cpu: 192, memory: 2000Gi, nvidia.com/gpu: 8}
+    requested:
+      - {cpu: 48, memory: 400Gi, nvidia.com/gpu: 4}
+      - {cpu: 24, memory: 200Gi, nvidia.com/gpu: 2}
+      - {}
+      - {cpu: 72, memory: 600Gi, nvidia.com/gpu: 6}
+    labels:
+      nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+      network.topology/block: block-a
+      topology.kubernetes.io/zone: us-east-1a
+    taints: [{key: nvidia.com/gpu, value: "present", effect: NoSchedule}]
+    images: [ghcr.io/example/trainer:latest]
+  - name: h100-b
+    count: 4
+    allocatable: {cpu: 192, memory: 2000Gi, nvidia.com/gpu: 8}
+    requested:
+      - {cpu: 36, memory: 300Gi, nvidia.com/gpu: 3}
+      - {}
+      - {cpu: 60, memory: 500Gi, nvidia.com/gpu: 5}
+      - {cpu: 12, memory: 100Gi, nvidia.com/gpu: 1}
+    labels:
+      nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+      network.topology/block: block-b
+      topology.kubernetes.io/zone: us-east-1a
+    taints: [{key: nvidia.com/gpu, value: "present", effect: NoSchedule}]
+  - name: a100
+    count: 2
+    allocatable: {cpu: 96, memory: 1000Gi, nvidia.com/gpu: 8}
+    labels:
+      nvidia.com/gpu.product: NVIDIA-A100-SXM4-80GB
+      topology.kubernetes.io/zone: us-east-1b
+    taints:
+      - {key: nvidia.com/gpu, value: "present", effect: NoSchedule}
+      - {key: karpenter.sh/capacity-type-spot, value: "true", effect: NoSchedule}
+  - name: cpu
+    count: 2
+    allocatable: {cpu: 64, memory: 256Gi}
+    requested: {cpu: 20, memory: 64Gi}
+    labels:
+      topology.kubernetes.io/zone: us-east-1b

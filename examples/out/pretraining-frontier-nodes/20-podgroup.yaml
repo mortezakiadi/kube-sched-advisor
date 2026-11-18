@@ -1,0 +1,8 @@
+apiVersion: scheduling.x-k8s.io/v1alpha1
+kind: PodGroup
+metadata:
+  name: pretraining-frontier-nodes
+  namespace: research
+spec:
+  minMember: 4
+  scheduleTimeoutSeconds: 600

@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-sft
+  namespace: research
+spec:
+  clusterIP: None
+  selector:
+    job-name: llm-sft
+  ports:
+  - name: rendezvous
+    port: 29500
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: llm-sft
+  namespace: research
+  labels:
+    team: alignment
+    kueue.x-k8s.io/queue-name: alignment-queue
+spec:
+  completionMode: Indexed
+  completions: 2
+  parallelism: 2
+  backoffLimitPerIndex: 0
+  maxFailedIndexes: 0
+  podFailurePolicy:
+    rules:
+    - action: Ignore
+      onPodConditions:
+      - type: DisruptionTarget
+        status: 'True'
+  template:
+    metadata:
+      labels:
+        app: llm-sft
+      annotations:
+        kueue.x-k8s.io/podset-preferred-topology: network.topology/block
+    spec:
+      priorityClassName: research-normal
+      containers:
+      - name: main
+        image: ghcr.io/example/trainer:latest
+        resources:
+          requests:
+            cpu: '96'
+            memory: 800Gi
+            nvidia.com/gpu: 8
+          limits:
+            memory: 800Gi
+            nvidia.com/gpu: 8
+        env:
+        - name: WORLD_SIZE
+          value: '2'
+        - name: MASTER_ADDR
+          value: llm-sft-0.llm-sft
+        - name: MASTER_PORT
+          value: '29500'
+        ports:
+        - containerPort: 29500
+          name: rendezvous
+        volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+      nodeSelector:
+        nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      schedulerName: gpu-binpack
+      volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 64Gi
+      restartPolicy: Never
+      subdomain: llm-sft
+  suspend: true

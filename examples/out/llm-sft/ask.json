@@ -1,0 +1,19 @@
+{
+  "name": "llm-sft",
+  "kind": "training",
+  "replicas": 2,
+  "gpus_per_pod": 8,
+  "cpu_per_pod": 96.0,
+  "memory_gib_per_pod": 800.0,
+  "gpu_model": "H100",
+  "namespace": "research",
+  "team": "alignment",
+  "priority": "normal",
+  "gang": true,
+  "needs_fast_interconnect": true,
+  "spread_across_zones": false,
+  "spot_ok": false,
+  "image": "ghcr.io/example/trainer:latest",
+  "queue_fair_share": true,
+  "raw_text": "Fine-tune a 70B model for the alignment team: 2 nodes x 8 H100 GPUs per node, deepspeed, tensor parallel over NVLink, shared GPU pool with other teams"
+}

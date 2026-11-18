@@ -1,0 +1,19 @@
+{
+  "name": "evals",
+  "kind": "batch",
+  "replicas": 20,
+  "gpus_per_pod": 1,
+  "cpu_per_pod": 12.0,
+  "memory_gib_per_pod": 100.0,
+  "gpu_model": null,
+  "namespace": "research",
+  "team": "research",
+  "priority": "low",
+  "gang": null,
+  "needs_fast_interconnect": false,
+  "spread_across_zones": false,
+  "spot_ok": true,
+  "image": "ghcr.io/example/trainer:latest",
+  "queue_fair_share": false,
+  "raw_text": "Run an evaluation sweep: 20 pods with 1 GPU each, spot is fine, we checkpoint"
+}

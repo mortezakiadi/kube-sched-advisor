@@ -1,0 +1,19 @@
+{
+  "name": "chat-serve",
+  "kind": "inference",
+  "replicas": 3,
+  "gpus_per_pod": 1,
+  "cpu_per_pod": 12.0,
+  "memory_gib_per_pod": 100.0,
+  "gpu_model": "H100",
+  "namespace": "research",
+  "team": "research",
+  "priority": "critical",
+  "gang": null,
+  "needs_fast_interconnect": false,
+  "spread_across_zones": true,
+  "spot_ok": false,
+  "image": "ghcr.io/example/trainer:latest",
+  "queue_fair_share": false,
+  "raw_text": "Production inference endpoint, 3 replicas with 1 H100 GPU each, highly available"
+}
