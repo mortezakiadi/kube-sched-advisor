@@ -1,0 +1,17 @@
+# Throwaway EKS cluster for the recorded demo. Three small CPU nodes; setup.sh makes
+# them advertise 8 GPUs each so the advisor has something to reason about.
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: ksa-demo
+  region: us-east-2
+  tags:
+    purpose: kube-sched-advisor-demo
+    temporary: "true"
+managedNodeGroups:
+  - name: demo
+    instanceType: t3.medium
+    desiredCapacity: 3
+    minSize: 3
+    maxSize: 3
+    volumeSize: 20

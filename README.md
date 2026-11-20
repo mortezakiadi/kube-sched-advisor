@@ -18,6 +18,8 @@
 
 [kube-scheduler-simulator](https://github.com/kubernetes-sigs/kube-scheduler-simulator) answers the question *"where would this pod go?"* This tool answers a different one: *"I need X. What should I write, and which scheduler should I use?"*
 
+**Demo:** a 2.5-minute captioned recording on a live Amazon EKS cluster, with the transcript and generated manifests, is in [`demo/`](demo/README.md).
+
 ## Quick start
 
 ```bash

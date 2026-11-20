@@ -1,0 +1,82 @@
+{
+  "intro": {
+    "title": "kube-sched-advisor",
+    "lines": [
+      "Describe a workload in plain English. Get a scheduling plan from your live cluster.",
+      "Recorded on a real Amazon EKS cluster. No narration: each step has a caption.",
+      "The nodes advertise 8 GPUs each as a stand-in. No real GPUs were used."
+    ],
+    "seconds": 9
+  },
+  "steps": [
+    {
+      "caption": "A real Amazon EKS cluster with 3 nodes. Each node advertises 8 GPUs, in two network blocks.",
+      "command": "kubectl get nodes -o custom-columns='NODE:.metadata.name,GPUS:.status.allocatable.nvidia\\.com/gpu,NETWORK-BLOCK:.metadata.labels.network\\.topology/block'",
+      "output": "NODE                                           GPUS   NETWORK-BLOCK\nnode-1                                         8      block-a\nnode-2                                         8      block-a\nnode-3                                         8      block-b",
+      "min_hold": 0
+    },
+    {
+      "caption": "Other teams already hold 2 GPUs on every node. 18 GPUs are free, but no node has 8 free.",
+      "command": "kubectl get pods -n other-teams -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName,GPUS-HELD:.spec.containers[0].resources.requests.nvidia\\.com/gpu'",
+      "output": "POD                NODE                                           GPUS-HELD\nother-team-job-0   node-1                                         2\nother-team-job-1   node-2                                         2\nother-team-job-2   node-3                                         2",
+      "min_hold": 0
+    },
+    {
+      "caption": "The advisor reads the live cluster through kubectl. No snapshot file, nothing is changed.",
+      "command": "python -m sched_advisor status",
+      "output": "Kubernetes 1.37 on EKS\nInstalled add-ons: none\nNetwork topology label: network.topology/block\nNode pools:\n- 1x NVIDIA-H100-80GB-HBM3 (NVIDIA-H100-80GB-HBM3) in us-east-2a: 8 GPU/node, 6 GPUs free, 0 fully-free nodes, 1.57 CPU free, taints=none\n- 1x NVIDIA-H100-80GB-HBM3 (NVIDIA-H100-80GB-HBM3) in us-east-2b: 8 GPU/node, 6 GPUs free, 0 fully-free nodes, 1.67 CPU free, taints=none\n- 1x NVIDIA-H100-80GB-HBM3 (NVIDIA-H100-80GB-HBM3) in us-east-2c: 8 GPU/node, 6 GPUs free, 0 fully-free nodes, 1.67 CPU free, taints=none",
+      "min_hold": 0
+    },
+    {
+      "caption": "The ask, in plain English: a 2-node, 8-GPU fine-tune that must start all at once.",
+      "command": "python -m sched_advisor suggest --name gang-finetune \"2 nodes x 8 H100 GPUs per node, NVLink, all-or-nothing fine-tune, 1 cpu and 1 GiB per pod\" | grep -E '^\\*\\*Recommended|^- \\*\\*(WARNING|NOTE)' | fold -s -w 104",
+      "output": "**Recommended strategy:** Secondary scheduler `gang-scheduler` (scheduler-plugins Coscheduling + GPU \nbin-packing)\n- **WARNING - Enough GPUs in total, but they are fragmented.** 18 GPUs are free, but 18 of them sit on \npartially-used nodes and each pod needs 8. This is the classic '0/N nodes are available: Insufficient \nnvidia.com/gpu' with idle GPUs on the dashboard. Bin-packing (MostAllocated with a high GPU weight) and \nthe descheduler fix this over time.\n- **WARNING - The gang cannot start right now under any scoring strategy.** With gang scheduling the \njob simply waits (holding nothing) instead of half-starting. To start it sooner: add capacity \n(Karpenter NodePool / node group for this GPU type), drain stragglers off partially-used nodes \n(descheduler), or preempt lower-priority work via PriorityClass.\n- **WARNING - No single network domain can host the whole job.** Capacity per `network.topology/block`: \n{'block-a': 0, 'block-b': 0}. Use a *preferred* topology (best effort) or reduce the number of workers.\n- **NOTE - EKS: default scheduler config is not editable.** That is why the weights live in a second \nscheduler selected via `schedulerName`.",
+      "min_hold": 9
+    },
+    {
+      "caption": "Check against the real kube-scheduler: one pod that wants a whole node. Same verdict as the advisor.",
+      "command": "kubectl apply -f demo/probe-pod.yaml && sleep 8 && kubectl get pod train-probe && kubectl get events --field-selector reason=FailedScheduling -o custom-columns=MESSAGE:.message --no-headers | sort -u",
+      "output": "pod/train-probe created\nNAME          READY   STATUS    RESTARTS   AGE\ntrain-probe   0/1     Pending   0          10s\n0/3 nodes are available: 3 Insufficient nvidia.com/gpu. preemption: 0/3 nodes are available: 3 No preemption victims found for incoming pod.",
+      "min_hold": 7
+    },
+    {
+      "caption": "Now the other teams' jobs finish and two nodes become completely free.",
+      "command": "kubectl delete pod train-probe && kubectl delete pod -n other-teams other-team-job-0 other-team-job-1",
+      "output": "pod \"train-probe\" deleted from default namespace\npod \"other-team-job-0\" deleted from other-teams namespace\npod \"other-team-job-1\" deleted from other-teams namespace",
+      "min_hold": 0
+    },
+    {
+      "caption": "Same ask, new cluster state: both workers place, and the whole job fits inside one network block.",
+      "command": "python -m sched_advisor suggest --name gang-finetune \"2 nodes x 8 H100 GPUs per node, NVLink, all-or-nothing fine-tune, 1 cpu and 1 GiB per pod\" | grep -E '^\\*\\*Recommended|\"placed\"|\"fits_entirely_in\"' | fold -s -w 104",
+      "output": "**Recommended strategy:** Secondary scheduler `gang-scheduler` (scheduler-plugins Coscheduling + GPU \nbin-packing)\n    \"placed\": \"2/2\",\n    \"placed\": \"2/2\",\n    \"fits_entirely_in\": \"block-a\"",
+      "min_hold": 8
+    },
+    {
+      "caption": "It wrote manifests. Ask the real API server to validate them. Nothing is created (server dry run).",
+      "command": "ls out/gang-finetune && kubectl create namespace research && kubectl apply --dry-run=server -f out/gang-finetune/00-priorityclass.yaml -f out/gang-finetune/30-workload.yaml",
+      "output": "00-priorityclass.yaml\n10-scheduler.yaml\n20-podgroup.yaml\n30-workload.yaml\nask.json\nREPORT.md\nnamespace/research created\npriorityclass.scheduling.k8s.io/research-normal created (server dry run)\nservice/gang-finetune created (server dry run)\njob.batch/gang-finetune created (server dry run)",
+      "min_hold": 6
+    },
+    {
+      "caption": "The plan also writes a PodGroup so both pods start together, and points the Job at the second scheduler.",
+      "command": "cat out/gang-finetune/20-podgroup.yaml && grep -n schedulerName out/gang-finetune/30-workload.yaml",
+      "output": "apiVersion: scheduling.x-k8s.io/v1alpha1\nkind: PodGroup\nmetadata:\n  name: gang-finetune\n  namespace: research\nspec:\n  minMember: 2\n  scheduleTimeoutSeconds: 600\n66:      schedulerName: gang-scheduler",
+      "min_hold": 8
+    },
+    {
+      "caption": "A different ask, different answer: inference should not use a gang scheduler.",
+      "command": "python -m sched_advisor suggest --name chat-serve \"serve a chat model, 3 replicas, 1 H100 GPU each, highly available, 1 cpu and 1 GiB per pod\" | grep -E '^\\*\\*Recommended|^- (Serving|Topology|A PodDisruption)' | fold -s -w 104",
+      "output": "**Recommended strategy:** Default kube-scheduler + spreading (Deployment, topology spread, PDB)\n- Serving needs availability, not packing: keep the default LeastAllocated scoring so replicas spread \nout and a single node failure costs one replica.\n- Topology spread across `topology.kubernetes.io/zone` is **hard** (DoNotSchedule) because this is \ncritical.\n- A PodDisruptionBudget keeps node drains/Karpenter consolidation from taking out several replicas at \nonce.",
+      "min_hold": 10
+    }
+  ],
+  "outro": {
+    "title": "Read-only. Explains why. Generates the manifests.",
+    "lines": [
+      "github.com/mortezakiadi/kube-sched-advisor",
+      "Proposal to Kubernetes SIG Scheduling",
+      "The demo cluster was deleted after recording."
+    ],
+    "seconds": 8
+  }
+}
