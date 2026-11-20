@@ -1,5 +1,8 @@
 # kube-sched-advisor
 
+> **Status: prototype, proposed to [Kubernetes SIG Scheduling](https://github.com/kubernetes/community/tree/main/sig-scheduling).**
+> No SIG has sponsored it yet. See [PROPOSAL.md](PROPOSAL.md) for scope, phases and the open questions.
+
 **Describe a workload in plain English. The tool reads your cluster's current state and tells you how to schedule the workload.** It writes the manifests and explains each choice.
 
 ```
@@ -89,3 +92,17 @@ Generated manifests validate with kubeconform. PodGroup and Volcano objects are 
 ## Limits (v0.1)
 
 The simulator models the plugins that matter for GPU work. It does not model inter-pod affinity, preemption, DRA, or GPU sharing (MIG/time-slicing), and the advisor never applies anything itself. The 1.35 alpha Workload API is listed as an alternative but isn't generated yet.
+
+## Community, discussion, contribution, and support
+
+- Slack: [#sig-scheduling](https://kubernetes.slack.com/messages/sig-scheduling)
+- Mailing list: [sig-scheduling](https://groups.google.com/a/kubernetes.io/g/sig-scheduling)
+- Contributing: see [CONTRIBUTING.md](CONTRIBUTING.md). Security: see [SECURITY.md](SECURITY.md).
+
+### Code of conduct
+
+Participation in the Kubernetes community is governed by the [Kubernetes Code of Conduct](code-of-conduct.md).
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE).

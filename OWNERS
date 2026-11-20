@@ -1,0 +1,5 @@
+# See the OWNERS docs at https://go.k8s.io/owners
+# Prototype stage: the author is the only approver. Before this moves into a
+# Kubernetes org, approvers must be active members of the sponsoring SIG.
+approvers:
+  - mortezakiadi
