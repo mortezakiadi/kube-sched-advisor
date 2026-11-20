@@ -32,6 +32,9 @@ python -m sched_advisor status
 # One shot, against the live cluster (current kubectl context)
 python -m sched_advisor suggest "Fine-tune 70B for the alignment team on 2 H100 nodes, NVLink, shared pool"
 
+# Short summary instead of the full report (files are still written)
+python -m sched_advisor suggest --brief "Fine-tune 70B on 2 H100 nodes, NVLink, all-or-nothing"
+
 # Interactive session; `refresh` re-reads the cluster
 python -m sched_advisor chat
 

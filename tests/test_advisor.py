@@ -127,3 +127,14 @@ def test_llm_translation_receives_cluster_state(monkeypatch, snap):
                 cluster_summary=C.summarize(snap))
     assert ask.gpu_model == "H100" and ask.replicas == 2 and ask.is_gang
     assert "NVIDIA-H100-80GB-HBM3" in seen["messages"][0]["content"]
+
+
+def test_brief_is_short_and_plain(snap):
+    from sched_advisor.report import render_brief
+    plan = advise(parse_rule_based("4 nodes x 8 H100 GPUs per node, NVLink, all-or-nothing pretraining"), snap)
+    text = render_brief(plan, "out/x")
+    assert text.startswith("Recommended: ")
+    assert "Findings:" in text and "WARNING:" in text
+    assert "```" not in text and "**" not in text and "`" not in text
+    assert max(len(line) for line in text.splitlines()) <= 100
+    assert len(text.splitlines()) < 30

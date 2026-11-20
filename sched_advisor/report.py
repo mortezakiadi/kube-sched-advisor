@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import textwrap
 
 import yaml
 
@@ -58,3 +60,43 @@ def write(plan: Plan, out_dir: str) -> list[str]:
             fh.write(content)
         written.append(path)
     return written
+
+
+def _plain(text: str) -> str:
+    return re.sub(r"[`*]", "", text)
+
+
+def _first_sentence(text: str) -> str:
+    return re.split(r"(?<=[.!?])\s", _plain(text), maxsplit=1)[0]
+
+
+def _placement_line(sim: dict) -> str | None:
+    parts = []
+    placed = (sim.get("default_scheduler") or {}).get("placed")
+    if placed:
+        parts.append(f"default scheduler places {placed} pods")
+    dom = sim.get("interconnect_domains") or {}
+    if dom:
+        parts.append(f"whole job fits in one {dom['label']}: {dom['fits_entirely_in']}"
+                     if dom.get("fits_entirely_in") else
+                     f"no single {dom['label']} has room for the whole job")
+    frag = sim.get("gpu_fragmentation") or {}
+    if frag:
+        parts.append(f"{frag['free_gpus']:g} GPUs free, {frag['fully_free_nodes']} whole nodes free")
+    return "; ".join(parts) or None
+
+
+def render_brief(plan: Plan, out_dir: str, width: int = 100) -> str:
+    """Short, terminal-friendly summary: strategy, key reasons, findings, placement."""
+    def wrap(prefix: str, text: str) -> str:
+        return textwrap.fill(text, width, initial_indent=prefix, subsequent_indent=" " * len(prefix))
+
+    lines = [wrap("Recommended: ", _plain(plan.strategy)), ""]
+    lines += ["Why:", *[wrap("  - ", _first_sentence(r)) for r in plan.rationale], ""]
+    if plan.findings:
+        lines += ["Findings:", *[wrap("  ", f"{_ICON[f.severity]}: {_plain(f.title)}.") for f in plan.findings], ""]
+    placement = _placement_line(plan.simulation)
+    if placement:
+        lines += [wrap("Simulation: ", placement), ""]
+    lines.append(f"Manifests and the full report: {out_dir}/")
+    return "\n".join(lines)

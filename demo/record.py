@@ -21,11 +21,10 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
-ASK_GANG = ('python -m sched_advisor suggest --name gang-finetune "2 nodes x 8 H100 GPUs per node, '
+ASK_GANG = ('python -m sched_advisor suggest --brief --name gang-finetune "2 nodes x 8 H100 GPUs per node, '
             'NVLink, all-or-nothing fine-tune, 1 cpu and 1 GiB per pod"')
-ASK_SERVE = ('python -m sched_advisor suggest --name chat-serve "serve a chat model, 3 replicas, '
+ASK_SERVE = ('python -m sched_advisor suggest --brief --name chat-serve "serve a chat model, 3 replicas, '
              '1 H100 GPU each, highly available, 1 cpu and 1 GiB per pod"')
-KEY_LINES = " | grep -E '^\\*\\*Recommended|^- \\*\\*(WARNING|NOTE)' | fold -s -w 104"
 
 STEPS = [
     dict(caption="A real Amazon EKS cluster with 3 nodes. Each node advertises 8 GPUs, in two network blocks.",
@@ -37,16 +36,16 @@ STEPS = [
     dict(caption="The advisor reads the live cluster through kubectl. No snapshot file, nothing is changed.",
          command="python -m sched_advisor status"),
     dict(caption="The ask, in plain English: a 2-node, 8-GPU fine-tune that must start all at once.",
-         command=ASK_GANG + KEY_LINES, min_hold=9),
+         command=ASK_GANG, min_hold=14),
     dict(caption="Check against the real kube-scheduler: one pod that wants a whole node. Same verdict as the advisor.",
          command="kubectl apply -f demo/probe-pod.yaml && sleep 8 && kubectl get pod train-probe && "
-                 "kubectl get events --field-selector reason=FailedScheduling -o custom-columns=MESSAGE:.message --no-headers | sort -u",
+                 "kubectl get events --field-selector involvedObject.name=train-probe,reason=FailedScheduling "
+                 "-o custom-columns=MESSAGE:.message --no-headers",
          min_hold=7),
     dict(caption="Now the other teams' jobs finish and two nodes become completely free.",
          command="kubectl delete pod train-probe && kubectl delete pod -n other-teams other-team-job-0 other-team-job-1"),
     dict(caption="Same ask, new cluster state: both workers place, and the whole job fits inside one network block.",
-         command=ASK_GANG + " | grep -E '^\\*\\*Recommended|\"placed\"|\"fits_entirely_in\"' | fold -s -w 104",
-         min_hold=8),
+         command=ASK_GANG, min_hold=14),
     dict(caption="It wrote manifests. Ask the real API server to validate them. Nothing is created (server dry run).",
          command="ls out/gang-finetune && kubectl create namespace research && kubectl apply --dry-run=server "
                  "-f out/gang-finetune/00-priorityclass.yaml -f out/gang-finetune/30-workload.yaml",
@@ -55,8 +54,7 @@ STEPS = [
          command="cat out/gang-finetune/20-podgroup.yaml && grep -n schedulerName out/gang-finetune/30-workload.yaml",
          min_hold=8),
     dict(caption="A different ask, different answer: inference should not use a gang scheduler.",
-         command=ASK_SERVE + " | grep -E '^\\*\\*Recommended|^- (Serving|Topology|A PodDisruption)' | fold -s -w 104",
-         min_hold=10),
+         command=ASK_SERVE, min_hold=11),
 ]
 
 INTRO = dict(title="kube-sched-advisor",

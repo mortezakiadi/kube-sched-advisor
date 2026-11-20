@@ -24,19 +24,19 @@
     {
       "caption": "The advisor reads the live cluster through kubectl. No snapshot file, nothing is changed.",
       "command": "python -m sched_advisor status",
-      "output": "Kubernetes 1.37 on EKS\nInstalled add-ons: none\nNetwork topology label: network.topology/block\nNode pools:\n- 1x NVIDIA-H100-80GB-HBM3 (NVIDIA-H100-80GB-HBM3) in us-east-2a: 8 GPU/node, 6 GPUs free, 0 fully-free nodes, 1.57 CPU free, taints=none\n- 1x NVIDIA-H100-80GB-HBM3 (NVIDIA-H100-80GB-HBM3) in us-east-2b: 8 GPU/node, 6 GPUs free, 0 fully-free nodes, 1.67 CPU free, taints=none\n- 1x NVIDIA-H100-80GB-HBM3 (NVIDIA-H100-80GB-HBM3) in us-east-2c: 8 GPU/node, 6 GPUs free, 0 fully-free nodes, 1.67 CPU free, taints=none",
+      "output": "Kubernetes 1.37 on EKS\nInstalled add-ons: none\nNetwork topology label: network.topology/block\nNode pools:\n- 1x NVIDIA-H100-80GB-HBM3 (NVIDIA-H100-80GB-HBM3) in us-east-2b: 8 GPU/node, 6 GPUs free, 0 fully-free nodes, 1.67 CPU free, taints=none\n- 1x NVIDIA-H100-80GB-HBM3 (NVIDIA-H100-80GB-HBM3) in us-east-2a: 8 GPU/node, 6 GPUs free, 0 fully-free nodes, 1.67 CPU free, taints=none\n- 1x NVIDIA-H100-80GB-HBM3 (NVIDIA-H100-80GB-HBM3) in us-east-2c: 8 GPU/node, 6 GPUs free, 0 fully-free nodes, 1.57 CPU free, taints=none",
       "min_hold": 0
     },
     {
       "caption": "The ask, in plain English: a 2-node, 8-GPU fine-tune that must start all at once.",
-      "command": "python -m sched_advisor suggest --name gang-finetune \"2 nodes x 8 H100 GPUs per node, NVLink, all-or-nothing fine-tune, 1 cpu and 1 GiB per pod\" | grep -E '^\\*\\*Recommended|^- \\*\\*(WARNING|NOTE)' | fold -s -w 104",
-      "output": "**Recommended strategy:** Secondary scheduler `gang-scheduler` (scheduler-plugins Coscheduling + GPU \nbin-packing)\n- **WARNING - Enough GPUs in total, but they are fragmented.** 18 GPUs are free, but 18 of them sit on \npartially-used nodes and each pod needs 8. This is the classic '0/N nodes are available: Insufficient \nnvidia.com/gpu' with idle GPUs on the dashboard. Bin-packing (MostAllocated with a high GPU weight) and \nthe descheduler fix this over time.\n- **WARNING - The gang cannot start right now under any scoring strategy.** With gang scheduling the \njob simply waits (holding nothing) instead of half-starting. To start it sooner: add capacity \n(Karpenter NodePool / node group for this GPU type), drain stragglers off partially-used nodes \n(descheduler), or preempt lower-priority work via PriorityClass.\n- **WARNING - No single network domain can host the whole job.** Capacity per `network.topology/block`: \n{'block-a': 0, 'block-b': 0}. Use a *preferred* topology (best effort) or reduce the number of workers.\n- **NOTE - EKS: default scheduler config is not editable.** That is why the weights live in a second \nscheduler selected via `schedulerName`.",
-      "min_hold": 9
+      "command": "python -m sched_advisor suggest --brief --name gang-finetune \"2 nodes x 8 H100 GPUs per node, NVLink, all-or-nothing fine-tune, 1 cpu and 1 GiB per pod\"",
+      "output": "Recommended: Secondary scheduler gang-scheduler (scheduler-plugins Coscheduling + GPU bin-packing)\n\nWhy:\n  - Pin to nvidia.com/gpu.product=NVIDIA-H100-80GB-HBM3 so the pod only lands on H100 nodes.\n  - No batch system is installed, so the lightest gang option is the Coscheduling plugin from\n    kubernetes-sigs/scheduler-plugins.\n  - It runs as a second scheduler: the default scheduler is untouched (required on EKS, where the\n    default scheduler's config cannot be edited).\n\nFindings:\n  BLOCKER: No node can run even one pod.\n  WARNING: Enough GPUs in total, but they are fragmented.\n  WARNING: The gang cannot start right now under any scoring strategy.\n  WARNING: No single network domain can host the whole job.\n  NOTE: EKS: default scheduler config is not editable.\n\nSimulation: default scheduler places 0/2 pods; no single network.topology/block has room for the\n            whole job; 18 GPUs free, 0 whole nodes free\n\nManifests and the full report: out/gang-finetune/",
+      "min_hold": 14
     },
     {
       "caption": "Check against the real kube-scheduler: one pod that wants a whole node. Same verdict as the advisor.",
-      "command": "kubectl apply -f demo/probe-pod.yaml && sleep 8 && kubectl get pod train-probe && kubectl get events --field-selector reason=FailedScheduling -o custom-columns=MESSAGE:.message --no-headers | sort -u",
-      "output": "pod/train-probe created\nNAME          READY   STATUS    RESTARTS   AGE\ntrain-probe   0/1     Pending   0          10s\n0/3 nodes are available: 3 Insufficient nvidia.com/gpu. preemption: 0/3 nodes are available: 3 No preemption victims found for incoming pod.",
+      "command": "kubectl apply -f demo/probe-pod.yaml && sleep 8 && kubectl get pod train-probe && kubectl get events --field-selector involvedObject.name=train-probe,reason=FailedScheduling -o custom-columns=MESSAGE:.message --no-headers",
+      "output": "pod/train-probe created\nNAME          READY   STATUS    RESTARTS   AGE\ntrain-probe   0/1     Pending   0          9s\n0/3 nodes are available: 3 Insufficient nvidia.com/gpu. preemption: 0/3 nodes are available: 3 No preemption victims found for incoming pod.",
       "min_hold": 7
     },
     {
@@ -47,9 +47,9 @@
     },
     {
       "caption": "Same ask, new cluster state: both workers place, and the whole job fits inside one network block.",
-      "command": "python -m sched_advisor suggest --name gang-finetune \"2 nodes x 8 H100 GPUs per node, NVLink, all-or-nothing fine-tune, 1 cpu and 1 GiB per pod\" | grep -E '^\\*\\*Recommended|\"placed\"|\"fits_entirely_in\"' | fold -s -w 104",
-      "output": "**Recommended strategy:** Secondary scheduler `gang-scheduler` (scheduler-plugins Coscheduling + GPU \nbin-packing)\n    \"placed\": \"2/2\",\n    \"placed\": \"2/2\",\n    \"fits_entirely_in\": \"block-a\"",
-      "min_hold": 8
+      "command": "python -m sched_advisor suggest --brief --name gang-finetune \"2 nodes x 8 H100 GPUs per node, NVLink, all-or-nothing fine-tune, 1 cpu and 1 GiB per pod\"",
+      "output": "Recommended: Secondary scheduler gang-scheduler (scheduler-plugins Coscheduling + GPU bin-packing)\n\nWhy:\n  - Pin to nvidia.com/gpu.product=NVIDIA-H100-80GB-HBM3 so the pod only lands on H100 nodes.\n  - No batch system is installed, so the lightest gang option is the Coscheduling plugin from\n    kubernetes-sigs/scheduler-plugins.\n  - It runs as a second scheduler: the default scheduler is untouched (required on EKS, where the\n    default scheduler's config cannot be edited).\n\nFindings:\n  NOTE: EKS: default scheduler config is not editable.\n\nSimulation: default scheduler places 2/2 pods; whole job fits in one network.topology/block:\n            block-a; 22 GPUs free, 2 whole nodes free\n\nManifests and the full report: out/gang-finetune/",
+      "min_hold": 14
     },
     {
       "caption": "It wrote manifests. Ask the real API server to validate them. Nothing is created (server dry run).",
@@ -65,9 +65,9 @@
     },
     {
       "caption": "A different ask, different answer: inference should not use a gang scheduler.",
-      "command": "python -m sched_advisor suggest --name chat-serve \"serve a chat model, 3 replicas, 1 H100 GPU each, highly available, 1 cpu and 1 GiB per pod\" | grep -E '^\\*\\*Recommended|^- (Serving|Topology|A PodDisruption)' | fold -s -w 104",
-      "output": "**Recommended strategy:** Default kube-scheduler + spreading (Deployment, topology spread, PDB)\n- Serving needs availability, not packing: keep the default LeastAllocated scoring so replicas spread \nout and a single node failure costs one replica.\n- Topology spread across `topology.kubernetes.io/zone` is **hard** (DoNotSchedule) because this is \ncritical.\n- A PodDisruptionBudget keeps node drains/Karpenter consolidation from taking out several replicas at \nonce.",
-      "min_hold": 10
+      "command": "python -m sched_advisor suggest --brief --name chat-serve \"serve a chat model, 3 replicas, 1 H100 GPU each, highly available, 1 cpu and 1 GiB per pod\"",
+      "output": "Recommended: Default kube-scheduler + spreading (Deployment, topology spread, PDB)\n\nWhy:\n  - Pin to nvidia.com/gpu.product=NVIDIA-H100-80GB-HBM3 so the pod only lands on H100 nodes.\n  - Serving needs availability, not packing: keep the default LeastAllocated scoring so replicas\n    spread out and a single node failure costs one replica.\n  - Topology spread across topology.kubernetes.io/zone is hard (DoNotSchedule) because this is\n    critical.\n  - A PodDisruptionBudget keeps node drains/Karpenter consolidation from taking out several replicas\n    at once.\n\nSimulation: default scheduler places 3/3 pods; 22 GPUs free, 2 whole nodes free\n\nManifests and the full report: out/chat-serve/",
+      "min_hold": 11
     }
   ],
   "outro": {

@@ -76,7 +76,7 @@ def colour_for(line: str):
         return AMBER
     if s.startswith(("Error", "error")) or "FAILED" in s:
         return RED
-    if s.startswith(("NOTE", "- **NOTE", "**Recommended", "Wrote")) or "NOTE -" in s:
+    if s.startswith(("NOTE", "- **NOTE", "**Recommended", "Recommended", "Simulation", "Manifests", "Wrote")) or "NOTE -" in s:
         return BLUE
     return FG
 

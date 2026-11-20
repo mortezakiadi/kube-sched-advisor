@@ -19,7 +19,7 @@ import sys
 from . import cluster as C
 from .advisor import advise
 from .parser import ask_to_json, parse
-from .report import render_markdown, write
+from .report import render_brief, render_markdown, write
 
 
 def _snapshot(args):
@@ -31,8 +31,11 @@ def _run(text: str, snap, args, name: str | None = None) -> None:
     plan = advise(ask, snap)
     out = os.path.join(args.out, ask.name)
     paths = write(plan, out)
-    print(render_markdown(plan))
-    print("\nWrote:\n  " + "\n  ".join(paths))
+    if args.brief:
+        print(render_brief(plan, out))
+    else:
+        print(render_markdown(plan))
+        print("\nWrote:\n  " + "\n  ".join(paths))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -44,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
     common.add_argument("--llm", action=argparse.BooleanOptionalAction, default=None,
                         help="translate with Claude (default: on when ANTHROPIC_API_KEY is set)")
     common.add_argument("--out", default="out")
+    common.add_argument("--brief", action="store_true",
+                        help="print a short summary instead of the full report (files are still written)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("suggest", parents=[common], help="plain-English ask -> plan + manifests")

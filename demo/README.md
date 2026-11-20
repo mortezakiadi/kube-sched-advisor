@@ -11,7 +11,7 @@ real output as text.
 |---|---|---|
 | 1-2 | A 3-node EKS cluster. Each node advertises 8 GPUs, in two network blocks. Other teams hold 2 GPUs on every node. | 18 GPUs are free, but no node has 8 free. |
 | 3 | `status` reads the live cluster through `kubectl`. | The advisor works from current state, not a description of it. |
-| 4 | Ask: a 2-node, 8-GPU, all-or-nothing fine-tune. The advisor warns about fragmentation, a gang that cannot start, and no single network block with room. | Explains the problem in scheduler terms before anything is submitted. |
+| 4 | Ask (with `--brief`, a short summary): a 2-node, 8-GPU, all-or-nothing fine-tune. The advisor warns about fragmentation, a gang that cannot start, and no single network block with room. | Explains the problem in scheduler terms before anything is submitted. |
 | 5 | A pod that wants a whole node is submitted to the default kube-scheduler. It stays `Pending` with `0/3 nodes are available: 3 Insufficient nvidia.com/gpu`. | The advisor's prediction matches what the real scheduler says. |
 | 6-7 | Two nodes free up. The same ask now places 2/2 workers inside one network block. | The advice follows cluster state. |
 | 8-9 | The generated manifests pass a server-side dry run. A PodGroup and a second scheduler (`gang-scheduler`) are generated. | On EKS the default scheduler cannot be reconfigured, so the plan uses a second one. |
