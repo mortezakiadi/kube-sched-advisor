@@ -1,24 +1,14 @@
 apiVersion: kueue.x-k8s.io/v1beta2
-kind: Topology
-metadata:
-  name: gpu-network
-spec:
-  levels:
-  - nodeLabel: network.topology/block
-  - nodeLabel: kubernetes.io/hostname
----
-apiVersion: kueue.x-k8s.io/v1beta2
 kind: ResourceFlavor
 metadata:
-  name: h100
+  name: a10g
 spec:
   nodeLabels:
-    nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+    nvidia.com/gpu.product: NVIDIA-A10G
   tolerations:
   - key: nvidia.com/gpu
     operator: Exists
     effect: NoSchedule
-  topologyName: gpu-network
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: ClusterQueue
@@ -39,14 +29,14 @@ spec:
     - memory
     - nvidia.com/gpu
     flavors:
-    - name: h100
+    - name: a10g
       resources:
       - name: cpu
-        nominalQuota: '13.63'
+        nominalQuota: '15.68'
       - name: memory
-        nominalQuota: 38.5449Gi
+        nominalQuota: 57.7903Gi
       - name: nvidia.com/gpu
-        nominalQuota: 26
+        nominalQuota: 4
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue

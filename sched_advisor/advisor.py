@@ -276,6 +276,12 @@ def advise(ask: WorkloadAsk, cluster: ClusterSnapshot) -> Plan:
             M.indexed_job(ask, spec, pod_labels={"scheduling.x-k8s.io/pod-group": ask.name}),
         ]
         plan.strategy = f"Secondary scheduler `{COSCHED_SCHEDULER}` (scheduler-plugins Coscheduling + GPU bin-packing)"
+        plan.findings.append(Finding(
+            "info", "Coscheduling does not wake up when GPUs free up",
+            "The plugin retries a waiting gang when a Pod or PodGroup is added or updated, or when the "
+            "scheduler's periodic retry runs (every 5 minutes). Freed GPUs alone do not trigger a retry. "
+            "To retry at once, touch the PodGroup, for example with `kubectl annotate podgroup <name> "
+            "retry=$(date +%s) --overwrite`."))
         plan.rationale += [
             "No batch system is installed, so the lightest gang option is the Coscheduling plugin from "
             "kubernetes-sigs/scheduler-plugins. Pods wait at the Permit stage until `minMember` of the PodGroup "

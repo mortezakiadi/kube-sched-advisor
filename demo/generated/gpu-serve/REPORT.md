@@ -24,15 +24,12 @@
 ## Simulation (filter -> score -> place, like kube-scheduler)
 ```json
 {
-  "single_pod_filter": "2/5 nodes are available.",
+  "single_pod_filter": "3/7 nodes are available.",
   "default_scheduler": {
     "placed": "2/2",
     "nodes": [
       "node-x",
       "node-x"
-    ],
-    "network_domains": [
-      "?"
     ]
   },
   "binpack_profile": {
@@ -40,15 +37,12 @@
     "nodes": [
       "node-x",
       "node-x"
-    ],
-    "network_domains": [
-      "?"
     ]
   },
   "gpu_fragmentation": {
-    "free_gpus": 2.0,
-    "stranded_gpus": 0,
-    "fully_free_nodes": 2,
+    "free_gpus": 3.0,
+    "stranded_gpus": 0.0,
+    "fully_free_nodes": 3,
     "stranded_ratio": 0.0
   }
 }

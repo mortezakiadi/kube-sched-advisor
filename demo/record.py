@@ -26,76 +26,86 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
 KUEUE_VERSION = "v0.20.7"
+SCHED_PLUGINS_VERSION = "v0.34.7"
+CUDA = "nvidia/cuda:12.4.1-base-ubuntu22.04"
 
 ADVISOR = "python -m sched_advisor suggest --brief"
-ASK_GANG = ADVISOR + (' --name gang-finetune "2 nodes x 8 H100 GPUs per node, NVLink, all-or-nothing '
-                      'fine-tune, 1 cpu and 1 GiB per pod"')
-ASK_GANG_KUEUE = ADVISOR + (' --name gang-kueue "2 nodes x 8 H100 GPUs per node, NVLink, all-or-nothing '
-                            'fine-tune, shared pool with other teams, 1 cpu and 1 GiB per pod"')
-ASK_GPU_SERVE = ADVISOR + (' --name gpu-serve --image nvidia/cuda:12.4.1-base-ubuntu22.04 --command "sleep infinity" '
-                           '"serve a chat model, 2 replicas, 1 A10G GPU each, highly available, '
-                           '1 cpu and 1 GiB per pod"')
+ASK_GANG = ADVISOR + (f' --name gang-train --image {CUDA} --command "nvidia-smi -L" '
+                      '"train on 3 workers, 1 A10G GPU each, all-or-nothing, 1 cpu and 1 GiB per pod"')
+ASK_GANG_KUEUE = ADVISOR + (' --name gang-kueue "train on 3 workers, 1 A10G GPU each, all-or-nothing, '
+                            'shared pool with other teams, 1 cpu and 1 GiB per pod"')
+ASK_SERVE = ADVISOR + (f' --name gpu-serve --image {CUDA} --command "sleep infinity" '
+                       '"serve a chat model, 2 replicas, 1 A10G GPU each, highly available, 1 cpu and 1 GiB per pod"')
 ASK_B200 = ADVISOR + ' --name train-b200 "train on 2 nodes with 8 B200 GPUs per node, all-or-nothing"'
-ASK_EVALS = ADVISOR + (' --name evals "batch eval job with 4 workers, 1 A10G GPU each, '
-                       '1 cpu and 1 GiB per pod"')
+
+ROWS_PODS = "custom-columns='POD:.metadata.name,STATUS:.status.phase,NODE:.spec.nodeName'"
 
 STEPS = [
     # ---------------------------------------------------------------- the cluster
-    dict(section=("The cluster", "Real EKS. Two real A10G GPU nodes, three nodes with stand-in H100 capacity."),
-         caption="Five nodes. Two g5.xlarge nodes carry a real NVIDIA A10G each. Three t3.medium nodes advertise 8 stand-in GPUs.",
-         command="kubectl get nodes -o custom-columns='NODE:.metadata.name,TYPE:.metadata.labels.node\\.kubernetes\\.io/instance-type,"
-                 "GPUS:.status.allocatable.nvidia\\.com/gpu,GPU-PRODUCT:.metadata.labels.nvidia\\.com/gpu\\.product,"
-                 "BLOCK:.metadata.labels.network\\.topology/block'"),
-    dict(caption="Other teams already hold 2 stand-in GPUs on every H100 node. 18 are free, but no node has 8 free.",
+    dict(section=("The cluster", "A real EKS cluster. All 4 GPUs are real NVIDIA A10G."),
+         caption="Four GPU nodes with one real NVIDIA A10G GPU each.",
+         command="kubectl get nodes -l ksa/real-gpu=true -o custom-columns='NODE:.metadata.name,"
+                 "TYPE:.metadata.labels.node\\.kubernetes\\.io/instance-type,GPUS:.status.allocatable.nvidia\\.com/gpu,"
+                 "GPU-PRODUCT:.metadata.labels.nvidia\\.com/gpu\\.product'"),
+    dict(caption="Other teams already run jobs on 2 of the 4 GPUs. Two are free, on two different nodes.",
          command="kubectl get pods -n other-teams -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName,"
                  "GPUS-HELD:.spec.containers[0].resources.requests.nvidia\\.com/gpu'"),
     dict(caption="The advisor reads the live cluster through kubectl. Nothing is changed.",
          command="python -m sched_advisor status"),
 
     # ---------------------------------------------------------------- scenario 1
-    dict(section=("Scenario 1: an all-or-nothing training job",
-                  "2 nodes x 8 H100, on a pool that other teams have fragmented."),
-         caption="The ask, in plain English: a 2-node, 8-GPU fine-tune that must start all at once.",
+    dict(section=("Scenario 1: a training job that must start all at once",
+                  "3 workers, 1 GPU each. Only 2 GPUs are free."),
+         caption="The ask, in plain English. The advisor warns that starting 2 of 3 workers would deadlock the job.",
          command=ASK_GANG, min_hold=14),
-    dict(caption="Check against the real kube-scheduler: one pod that wants a whole node. Same verdict as the advisor.",
-         command="kubectl apply -f demo/probe-pod.yaml && sleep 8 && kubectl get pod train-probe && "
-                 "kubectl get events --field-selector involvedObject.name=train-probe,reason=FailedScheduling "
-                 "-o custom-columns=MESSAGE:.message --no-headers",
-         min_hold=7),
-    dict(caption="Now the other teams' jobs finish and two nodes become completely free.",
-         command="kubectl delete pod train-probe && kubectl delete pod -n other-teams other-team-job-0 other-team-job-1"),
-    dict(caption="Same ask, new cluster state: both workers place, and the whole job fits inside one network block.",
-         command=ASK_GANG, min_hold=14),
-    dict(caption="It wrote manifests. Ask the real API server to validate them. Nothing is created (server dry run).",
-         command="ls out/gang-finetune && kubectl create namespace research && kubectl apply --dry-run=server "
-                 "-f out/gang-finetune/00-priorityclass.yaml -f out/gang-finetune/30-workload.yaml",
-         min_hold=6),
-    dict(caption="The plan also writes a PodGroup so both pods start together, and points the Job at the second scheduler.",
-         command="cat out/gang-finetune/20-podgroup.yaml && grep -n schedulerName out/gang-finetune/30-workload.yaml",
+    dict(caption="The same job on the default scheduler, for real: two workers start and hold GPUs. The third waits.",
+         command="kubectl apply -f demo/plain-job.yaml && sleep 15 && kubectl get pods -l job-name=plain-train -o " + ROWS_PODS,
          min_hold=8),
+    dict(caption="Delete it. Those two GPUs were held for a job that could never finish.",
+         command="kubectl delete job plain-train --wait=true"),
+    dict(caption="Apply what the advisor generated: a second scheduler with the Coscheduling plugin, and a PodGroup for the job.",
+         command="kubectl create namespace research && kubectl apply -f out/gang-train/00-priorityclass.yaml "
+                 "-f out/gang-train/10-scheduler.yaml -f out/gang-train/20-podgroup.yaml && "
+                 "kubectl rollout status -n kube-system deploy/gang-scheduler --timeout=180s",
+         hidden_before=dict(note=f"Installed the PodGroup API from scheduler-plugins {SCHED_PLUGINS_VERSION} (output omitted from the video)",
+                            command=f"kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/scheduler-plugins/"
+                                    f"{SCHED_PLUGINS_VERSION}/manifests/coscheduling/crd.yaml"),
+         min_hold=7),
+    dict(caption="Submit the job. All three workers wait, and none holds a GPU. Two are free, three are needed.",
+         command="kubectl apply -f out/gang-train/30-workload.yaml && sleep 25 && kubectl get pods -n research -o " + ROWS_PODS,
+         min_hold=8),
+    dict(caption="Another team's job finishes and frees one GPU.",
+         command="kubectl delete pod -n other-teams other-team-b"),
+    dict(caption="The gang scheduler retries on new pods and on a 5-minute timer, not when a GPU frees up. Still waiting.",
+         command="sleep 20 && kubectl get pods -n research -o " + ROWS_PODS,
+         min_hold=7),
+    dict(caption="As the advisor's note says: touch the PodGroup and the scheduler retries at once.",
+         command="kubectl annotate podgroup -n research gang-train retry=$(date +%s) --overwrite"),
+    dict(caption="All three workers start together, each on its own real GPU.",
+         command="kubectl wait --for=condition=complete job/gang-train -n research --timeout=300s && "
+                 "kubectl logs -n research -l job-name=gang-train --prefix",
+         min_hold=9),
 
     # ---------------------------------------------------------------- scenario 2
-    dict(section=("Scenario 2: inference on real GPUs",
-                  "The two real A10G nodes. The plan is applied for real."),
-         caption="A serving ask on the real GPUs. The advisor sees the GPU nodes are tainted and plans for it.",
-         command=ASK_GPU_SERVE, min_hold=14),
+    dict(section=("Scenario 2: a highly available inference service",
+                  "2 replicas, 1 GPU each. A different ask gets a different plan, applied for real."),
+         caption="A serving ask. No gang scheduler this time: the default scheduler, zone spread and a disruption budget.",
+         command=ASK_SERVE, min_hold=12),
     dict(caption="Apply the generated manifests for real. The only edits are the image and command given on the command line.",
          command="kubectl apply -f out/gpu-serve/00-priorityclass.yaml -f out/gpu-serve/30-workload.yaml && "
                  "kubectl rollout status -n research deploy/gpu-serve --timeout=300s",
          min_hold=6),
-    dict(caption="Both replicas are running, one on each real GPU node.",
-         command="kubectl get pods -n research -o custom-columns='POD:.metadata.name,STATUS:.status.phase,NODE:.spec.nodeName'",
+    dict(caption="Both replicas are running, each on its own node.",
+         command="kubectl get pods -n research -l app=gpu-serve -o " + ROWS_PODS,
          min_hold=6),
-    dict(caption="Inside the pod, the real GPU the scheduler gave it.",
+    dict(caption="Inside a pod: the real GPU the scheduler gave it.",
          command="kubectl exec -n research deploy/gpu-serve -- nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv",
          min_hold=7),
-    dict(caption="Both real GPUs are now taken. A batch ask for 4 more GPU workers, and the advisor says so.",
-         command=ASK_EVALS, min_hold=12),
 
     # ---------------------------------------------------------------- scenario 3
     dict(section=("Scenario 3: asking for hardware the cluster does not have",
                   "The advisor should say so instead of generating a job that never starts."),
-         caption="An ask for B200 GPUs. This cluster has H100-class and A10G capacity only.",
+         caption="An ask for B200 GPUs. This cluster has A10G GPUs only.",
          command=ASK_B200, min_hold=12),
 
     # ---------------------------------------------------------------- scenario 4
@@ -108,7 +118,7 @@ STEPS = [
                                     f"{KUEUE_VERSION}/manifests.yaml && kubectl wait --for=condition=Available "
                                     f"deploy/kueue-controller-manager -n kueue-system --timeout=240s"),
          min_hold=6),
-    dict(caption="A shared-pool ask on the same cluster. The plan now uses Kueue queues instead of a second scheduler.",
+    dict(caption="A shared-pool ask on the same cluster. The plan now uses Kueue queues.",
          command=ASK_GANG_KUEUE, min_hold=14),
     dict(caption="Kueue is really installed, so its API server can validate the generated queue objects. Nothing is created.",
          command="kubectl apply --dry-run=server -f out/gang-kueue/20-kueue.yaml -f out/gang-kueue/30-workload.yaml",
@@ -118,7 +128,7 @@ STEPS = [
 INTRO = dict(title="kube-sched-advisor",
              lines=["Describe a workload in plain English. Get a scheduling plan from your live cluster.",
                     "Recorded on a real Amazon EKS cluster. No narration: each step has a caption.",
-                    "Two real NVIDIA A10G nodes. The H100 nodes are stand-ins: CPU nodes that advertise 8 GPUs."],
+                    "Every GPU is real: 4 NVIDIA A10G, one on each of four nodes."],
              seconds=9)
 OUTRO = dict(title="Read-only. Explains why. Generates the manifests.",
              lines=["github.com/mortezakiadi/kube-sched-advisor",
@@ -144,6 +154,7 @@ def build_redactor(env: dict):
     def redact(s: str) -> str:
         for real_name, alias in mapping.items():
             s = s.replace(real_name, alias.ljust(len(real_name)))   # keep table columns aligned
+        s = re.sub(r"UUID: GPU-[0-9a-f-]+", "UUID: GPU-<id>", s)
         s = re.sub(r"ip-\d+-\d+-\d+-\d+[\w.\-]*", "node-x", s)
         s = re.sub(r"\b\d{12}\b", "<account-id>", s)
         s = re.sub(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", "x.x.x.x", s)

@@ -1,0 +1,20 @@
+# What a team would submit without gang scheduling: three workers, one GPU each, handled by the
+# default kube-scheduler. Used to show a half-started job on the real cluster.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: plain-train
+spec:
+  completions: 3
+  parallelism: 3
+  template:
+    spec:
+      restartPolicy: Never
+      tolerations:
+      - {key: nvidia.com/gpu, operator: Exists, effect: NoSchedule}
+      containers:
+      - name: train
+        image: registry.k8s.io/pause:3.10
+        resources:
+          requests: {cpu: 10m, memory: 8Mi, nvidia.com/gpu: "1"}
+          limits: {nvidia.com/gpu: "1"}

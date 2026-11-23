@@ -158,6 +158,23 @@ def scheduler_config(name: str, *, strategy: str, weights: dict[str, int],
     }
 
 
+def _coscheduling_rbac(name: str, ns: str, config: dict) -> list[dict]:
+    """The Coscheduling plugin watches PodGroups; system:kube-scheduler does not grant that."""
+    if "Coscheduling" not in str(config):
+        return []
+    return [
+        {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
+         "metadata": {"name": f"{name}-podgroups"},
+         "rules": [{"apiGroups": ["scheduling.x-k8s.io"],
+                    "resources": ["podgroups", "podgroups/status"],
+                    "verbs": ["get", "list", "watch", "update", "patch"]}]},
+        {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRoleBinding",
+         "metadata": {"name": f"{name}-podgroups"},
+         "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": f"{name}-podgroups"},
+         "subjects": [{"kind": "ServiceAccount", "name": name, "namespace": ns}]},
+    ]
+
+
 def scheduler_deployment(name: str, config: dict, image: str) -> list[dict]:
     import yaml
     ns = "kube-system"
@@ -168,6 +185,26 @@ def scheduler_deployment(name: str, config: dict, image: str) -> list[dict]:
            "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": role},
            "subjects": [{"kind": "ServiceAccount", "name": name, "namespace": ns}]}
           for role in ("system:kube-scheduler", "system:volume-scheduler")],
+        # A second kube-scheduler reads the API server's client-auth config at start-up. Without
+        # this binding it logs "cannot list configmaps extension-apiserver-authentication".
+        {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
+         "metadata": {"name": f"{name}-auth-reader", "namespace": ns},
+         "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role",
+                     "name": "extension-apiserver-authentication-reader"},
+         "subjects": [{"kind": "ServiceAccount", "name": name, "namespace": ns}]},
+        # system:kube-scheduler only allows the lease named "kube-scheduler", so a second scheduler
+        # with its own lease name needs its own permission, or no replica ever becomes leader and
+        # nothing is scheduled.
+        {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
+         "metadata": {"name": f"{name}-leader-election", "namespace": ns},
+         "rules": [{"apiGroups": ["coordination.k8s.io"], "resources": ["leases"], "verbs": ["create"]},
+                   {"apiGroups": ["coordination.k8s.io"], "resources": ["leases"],
+                    "resourceNames": [name], "verbs": ["get", "update"]}]},
+        {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
+         "metadata": {"name": f"{name}-leader-election", "namespace": ns},
+         "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": f"{name}-leader-election"},
+         "subjects": [{"kind": "ServiceAccount", "name": name, "namespace": ns}]},
+        *_coscheduling_rbac(name, ns, config),
         {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": f"{name}-config", "namespace": ns},
          "data": {"config.yaml": yaml.safe_dump(config, sort_keys=False)}},
         {"apiVersion": "apps/v1", "kind": "Deployment",

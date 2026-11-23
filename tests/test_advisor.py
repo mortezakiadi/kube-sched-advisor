@@ -148,3 +148,25 @@ def test_image_and_command_reach_the_manifest(snap):
     container = docs[0]["spec"]["template"]["spec"]["containers"][0]
     assert container["image"] == "nvidia/cuda:12.4.1-base-ubuntu22.04"
     assert container["command"] == ["sh", "-c", "nvidia-smi -L"]
+
+
+def test_second_scheduler_gets_the_rbac_it_needs(snap):
+    plan = advise(parse_rule_based("4 nodes x 8 H100 GPUs per node, NVLink, all-or-nothing pretraining"), snap)
+    docs = plan.files["10-scheduler.yaml"]
+    kinds = {(d["kind"], d["metadata"]["name"]) for d in docs}
+    assert ("RoleBinding", "gang-scheduler-auth-reader") in kinds
+    assert ("Role", "gang-scheduler-leader-election") in kinds
+    role = next(d for d in docs if d["kind"] == "ClusterRole")
+    assert role["rules"][0]["resources"] == ["podgroups", "podgroups/status"]
+
+
+def test_binpack_scheduler_does_not_get_podgroup_access(snap):
+    plan = advise(parse_rule_based("Run an evaluation sweep: 20 pods with 1 GPU each, spot is fine, we checkpoint"), snap)
+    docs = plan.files["10-scheduler.yaml"]          # the gpu-binpack profile has no Coscheduling plugin
+    assert any(d["kind"] == "RoleBinding" for d in docs)
+    assert not any(d["kind"] == "ClusterRole" for d in docs)
+
+
+def test_coscheduling_plan_warns_that_freed_gpus_do_not_wake_the_gang(snap):
+    plan = advise(parse_rule_based("4 nodes x 8 H100 GPUs per node, NVLink, all-or-nothing pretraining"), snap)
+    assert any("does not wake up" in f.title and f.severity == "info" for f in plan.findings)

@@ -21,8 +21,8 @@ metadata:
     kueue.x-k8s.io/queue-name: research-queue
 spec:
   completionMode: Indexed
-  completions: 2
-  parallelism: 2
+  completions: 3
+  parallelism: 3
   backoffLimitPerIndex: 0
   maxFailedIndexes: 0
   podFailurePolicy:
@@ -35,8 +35,6 @@ spec:
     metadata:
       labels:
         app: gang-kueue
-      annotations:
-        kueue.x-k8s.io/podset-required-topology: network.topology/block
     spec:
       priorityClassName: research-normal
       containers:
@@ -46,13 +44,13 @@ spec:
           requests:
             cpu: '1'
             memory: 1Gi
-            nvidia.com/gpu: 8
+            nvidia.com/gpu: 1
           limits:
             memory: 1Gi
-            nvidia.com/gpu: 8
+            nvidia.com/gpu: 1
         env:
         - name: WORLD_SIZE
-          value: '2'
+          value: '3'
         - name: MASTER_ADDR
           value: gang-kueue-0.gang-kueue
         - name: MASTER_PORT
@@ -64,7 +62,7 @@ spec:
         - name: dshm
           mountPath: /dev/shm
       nodeSelector:
-        nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+        nvidia.com/gpu.product: NVIDIA-A10G
       tolerations:
       - key: nvidia.com/gpu
         operator: Exists

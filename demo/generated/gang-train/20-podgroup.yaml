@@ -1,8 +1,8 @@
 apiVersion: scheduling.x-k8s.io/v1alpha1
 kind: PodGroup
 metadata:
-  name: gang-finetune
+  name: gang-train
   namespace: research
 spec:
-  minMember: 2
+  minMember: 3
   scheduleTimeoutSeconds: 600
