@@ -138,3 +138,13 @@ def test_brief_is_short_and_plain(snap):
     assert "```" not in text and "**" not in text and "`" not in text
     assert max(len(line) for line in text.splitlines()) <= 100
     assert len(text.splitlines()) < 30
+
+
+def test_image_and_command_reach_the_manifest(snap):
+    ask = parse_rule_based("serve a chat model, 2 replicas, 1 A100 GPU each")
+    ask.image, ask.command = "nvidia/cuda:12.4.1-base-ubuntu22.04", ["sh", "-c", "nvidia-smi -L"]
+    plan = advise(ask, snap)
+    docs = [d for d in plan.files["30-workload.yaml"] if d["kind"] == "Deployment"]
+    container = docs[0]["spec"]["template"]["spec"]["containers"][0]
+    assert container["image"] == "nvidia/cuda:12.4.1-base-ubuntu22.04"
+    assert container["command"] == ["sh", "-c", "nvidia-smi -L"]

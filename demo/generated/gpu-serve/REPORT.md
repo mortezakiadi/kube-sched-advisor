@@ -1,21 +1,22 @@
-# Scheduling plan: `chat-serve`
+# Scheduling plan: `gpu-serve`
 
-> serve a chat model, 3 replicas, 1 H100 GPU each, highly available, 1 cpu and 1 GiB per pod
+> serve a chat model, 2 replicas, 1 A10G GPU each, highly available, 1 cpu and 1 GiB per pod
 
 **Recommended strategy:** Default kube-scheduler + spreading (Deployment, topology spread, PDB)
 
 | field | value |
 |---|---|
 | kind | inference |
-| workers / replicas | 3 |
+| workers / replicas | 2 |
 | per pod | 1 GPU, 1 CPU, 1 GiB |
-| GPU model | H100 |
+| GPU model | A10G |
 | gang (all-or-nothing) | False |
 | fast interconnect | False |
 | priority | normal |
 
 ## Why
-- Pin to `nvidia.com/gpu.product=NVIDIA-H100-80GB-HBM3` so the pod only lands on H100 nodes.
+- Pin to `nvidia.com/gpu.product=NVIDIA-A10G` so the pod only lands on A10G nodes.
+- Add tolerations for GPU-node taints (taints keep CPU pods off GPUs; a toleration only *allows* placement, it does not attract the pod - the nodeSelector/requests do that).
 - Serving needs availability, not packing: keep the default LeastAllocated scoring so replicas spread out and a single node failure costs one replica.
 - Topology spread across `topology.kubernetes.io/zone` is **hard** (DoNotSchedule) because this is critical.
 - A PodDisruptionBudget keeps node drains/Karpenter consolidation from taking out several replicas at once.
@@ -23,36 +24,32 @@
 ## Simulation (filter -> score -> place, like kube-scheduler)
 ```json
 {
-  "single_pod_filter": "3/3 nodes are available.",
+  "single_pod_filter": "2/5 nodes are available.",
   "default_scheduler": {
-    "placed": "3/3",
+    "placed": "2/2",
     "nodes": [
-      "node-x",
       "node-x",
       "node-x"
     ],
     "network_domains": [
-      "block-a",
-      "block-b"
+      "?"
     ]
   },
   "binpack_profile": {
-    "placed": "3/3",
+    "placed": "2/2",
     "nodes": [
-      "node-x",
       "node-x",
       "node-x"
     ],
     "network_domains": [
-      "block-a",
-      "block-b"
+      "?"
     ]
   },
   "gpu_fragmentation": {
-    "free_gpus": 22.0,
-    "stranded_gpus": 6.0,
+    "free_gpus": 2.0,
+    "stranded_gpus": 0,
     "fully_free_nodes": 2,
-    "stranded_ratio": 0.27
+    "stranded_ratio": 0.0
   }
 }
 ```

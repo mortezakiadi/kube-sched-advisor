@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shlex
 import sys
 
 from . import cluster as C
@@ -28,6 +29,10 @@ def _snapshot(args):
 
 def _run(text: str, snap, args, name: str | None = None) -> None:
     ask = parse(text, name=name, use_llm=args.llm, cluster_summary=C.summarize(snap))
+    if getattr(args, "image", None):
+        ask.image = args.image
+    if getattr(args, "command", None):
+        ask.command = shlex.split(args.command)
     plan = advise(ask, snap)
     out = os.path.join(args.out, ask.name)
     paths = write(plan, out)
@@ -54,6 +59,8 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("suggest", parents=[common], help="plain-English ask -> plan + manifests")
     s.add_argument("ask", nargs="?", help="the request (or pipe it on stdin)")
     s.add_argument("--name")
+    s.add_argument("--image", help="container image for the generated workload (default: a placeholder)")
+    s.add_argument("--command", help="container command for the generated workload, e.g. 'sh -c \"nvidia-smi && sleep 3600\"'")
     sub.add_parser("chat", parents=[common], help="interactive session")
     sub.add_parser("status", parents=[common], help="show what the advisor sees in the cluster")
     pa = sub.add_parser("parse", parents=[common], help="only show how the ask is understood")

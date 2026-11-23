@@ -1,0 +1,8 @@
+apiVersion: scheduling.x-k8s.io/v1alpha1
+kind: PodGroup
+metadata:
+  name: train-b200
+  namespace: research
+spec:
+  minMember: 2
+  scheduleTimeoutSeconds: 600

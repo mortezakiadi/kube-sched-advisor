@@ -63,6 +63,10 @@ spec:
           mountPath: /dev/shm
       nodeSelector:
         nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
       schedulerName: gang-scheduler
       volumes:
       - name: dshm

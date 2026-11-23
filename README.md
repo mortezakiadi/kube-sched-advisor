@@ -21,7 +21,7 @@
 
 [kube-scheduler-simulator](https://github.com/kubernetes-sigs/kube-scheduler-simulator) answers the question *"where would this pod go?"* This tool answers a different one: *"I need X. What should I write, and which scheduler should I use?"*
 
-**Demo:** a 2.5-minute captioned recording on a live Amazon EKS cluster, with the transcript and generated manifests, is in [`demo/`](demo/README.md).
+**Demo:** a 5-minute captioned recording on a live Amazon EKS cluster (two real A10G GPU nodes, a stand-in H100 pool, Kueue), with the transcript and generated manifests, is in [`demo/`](demo/README.md).
 
 ## Quick start
 
@@ -37,6 +37,9 @@ python -m sched_advisor suggest "Fine-tune 70B for the alignment team on 2 H100 
 
 # Short summary instead of the full report (files are still written)
 python -m sched_advisor suggest --brief "Fine-tune 70B on 2 H100 nodes, NVLink, all-or-nothing"
+
+# Set the container image and command in the generated workload
+python -m sched_advisor suggest --image nvidia/cuda:12.4.1-base-ubuntu22.04 --command "sleep infinity" "serve a chat model, 2 replicas, 1 A10G GPU each"
 
 # Interactive session; `refresh` re-reads the cluster
 python -m sched_advisor chat

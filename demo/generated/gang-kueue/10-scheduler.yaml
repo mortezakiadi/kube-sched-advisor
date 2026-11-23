@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gpu-binpack
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gpu-binpack-kube-scheduler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:kube-scheduler
+subjects:
+- kind: ServiceAccount
+  name: gpu-binpack
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gpu-binpack-volume-scheduler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:volume-scheduler
+subjects:
+- kind: ServiceAccount
+  name: gpu-binpack
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpu-binpack-config
+  namespace: kube-system
+data:
+  config.yaml: "apiVersion: kubescheduler.config.k8s.io/v1\nkind: KubeSchedulerConfiguration\n\
+    leaderElection:\n  leaderElect: true\n  resourceName: gpu-binpack\n  resourceNamespace:\
+    \ kube-system\nprofiles:\n- schedulerName: gpu-binpack\n  pluginConfig:\n  - name:\
+    \ NodeResourcesFit\n    args:\n      scoringStrategy:\n        type: MostAllocated\n\
+    \        resources:\n        - name: cpu\n          weight: 1\n        - name:\
+    \ memory\n          weight: 1\n        - name: nvidia.com/gpu\n          weight:\
+    \ 5\n  plugins:\n    score:\n      enabled:\n      - name: ImageLocality\n   \
+    \     weight: 1\n"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-binpack
+  namespace: kube-system
+  labels:
+    component: gpu-binpack
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      component: gpu-binpack
+  template:
+    metadata:
+      labels:
+        component: gpu-binpack
+    spec:
+      serviceAccountName: gpu-binpack
+      priorityClassName: system-cluster-critical
+      containers:
+      - name: scheduler
+        image: registry.k8s.io/kube-scheduler:v1.37.0
+        command:
+        - kube-scheduler
+        - --config=/etc/scheduler/config.yaml
+        - --v=3
+        volumeMounts:
+        - name: config
+          mountPath: /etc/scheduler
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+      volumes:
+      - name: config
+        configMap:
+          name: gpu-binpack-config

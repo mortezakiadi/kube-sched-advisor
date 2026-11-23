@@ -45,15 +45,15 @@ def load_font(cands, size):
     return ImageFont.load_default()
 
 
-MONO = load_font(MONO_CANDIDATES, 17)
-MONO_B = load_font(MONO_CANDIDATES, 17)
+MONO = load_font(MONO_CANDIDATES, 16)
+MONO_B = load_font(MONO_CANDIDATES, 16)
 SANS = load_font(SANS_CANDIDATES, 27)
 SANS_S = load_font(SANS_CANDIDATES, 19)
 SANS_XL = load_font(SANS_CANDIDATES, 46)
 
 CHAR_W = MONO.getlength("M")
 COLS = int((W - 2 * PAD) // CHAR_W)
-LINE_H = 24
+LINE_H = 21
 TERM_TOP = CAP_H + BAR_H
 ROWS = (H - TERM_TOP - 16) // LINE_H
 
@@ -153,6 +153,9 @@ def render(transcript: dict, out: str):
     steps = transcript["steps"]
     for n, st in enumerate(steps, 1):
         label = f"Step {n} of {len(steps)}"
+        if st.get("section"):
+            sec = st["section"]
+            pipe.put(card(sec["title"], [sec["subtitle"]]), 4)
         cap = st["caption"]
         cap_t = read_seconds(cap, 3.0)
         prompt = "$ "

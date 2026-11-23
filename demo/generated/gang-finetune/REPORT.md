@@ -16,6 +16,7 @@
 
 ## Why
 - Pin to `nvidia.com/gpu.product=NVIDIA-H100-80GB-HBM3` so the pod only lands on H100 nodes.
+- Add tolerations for GPU-node taints (taints keep CPU pods off GPUs; a toleration only *allows* placement, it does not attract the pod - the nodeSelector/requests do that).
 - No batch system is installed, so the lightest gang option is the Coscheduling plugin from kubernetes-sigs/scheduler-plugins. Pods wait at the Permit stage until `minMember` of the PodGroup can all be placed, then bind together.
 - It runs as a **second** scheduler: the default scheduler is untouched (required on EKS, where the default scheduler's config cannot be edited).
 
@@ -25,7 +26,7 @@
 ## Simulation (filter -> score -> place, like kube-scheduler)
 ```json
 {
-  "single_pod_filter": "2/3 nodes are available.",
+  "single_pod_filter": "2/5 nodes are available.",
   "default_scheduler": {
     "placed": "2/2",
     "nodes": [

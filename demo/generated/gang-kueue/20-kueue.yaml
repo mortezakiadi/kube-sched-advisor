@@ -1,0 +1,57 @@
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: Topology
+metadata:
+  name: gpu-network
+spec:
+  levels:
+  - nodeLabel: network.topology/block
+  - nodeLabel: kubernetes.io/hostname
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata:
+  name: h100
+spec:
+  nodeLabels:
+    nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+  topologyName: gpu-network
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: research-cq
+spec:
+  namespaceSelector: {}
+  cohortName: research
+  queueingStrategy: BestEffortFIFO
+  preemption:
+    reclaimWithinCohort: Any
+    withinClusterQueue: LowerPriority
+    borrowWithinCohort:
+      policy: LowerPriority
+  resourceGroups:
+  - coveredResources:
+    - cpu
+    - memory
+    - nvidia.com/gpu
+    flavors:
+    - name: h100
+      resources:
+      - name: cpu
+        nominalQuota: '13.63'
+      - name: memory
+        nominalQuota: 38.5449Gi
+      - name: nvidia.com/gpu
+        nominalQuota: 26
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  name: research-queue
+  namespace: research
+spec:
+  clusterQueue: research-cq

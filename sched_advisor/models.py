@@ -62,6 +62,7 @@ class WorkloadAsk:
     spread_across_zones: bool = False
     spot_ok: bool = False
     image: str = "ghcr.io/example/trainer:latest"
+    command: list[str] = field(default_factory=list)   # empty = use the image's own entrypoint
     queue_fair_share: bool = False          # many teams share a GPU pool
     raw_text: str = ""
 

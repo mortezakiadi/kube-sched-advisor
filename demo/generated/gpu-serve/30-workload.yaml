@@ -1,15 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: chat-serve
+  name: gpu-serve
   namespace: research
   labels:
     team: research
 spec:
-  replicas: 3
+  replicas: 2
   selector:
     matchLabels: &id001
-      app: chat-serve
+      app: gpu-serve
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -21,7 +21,7 @@ spec:
       priorityClassName: research-normal
       containers:
       - name: main
-        image: ghcr.io/example/trainer:latest
+        image: nvidia/cuda:12.4.1-base-ubuntu22.04
         resources:
           requests:
             cpu: '1'
@@ -30,11 +30,18 @@ spec:
           limits:
             memory: 1Gi
             nvidia.com/gpu: 1
+        command:
+        - sleep
+        - infinity
         volumeMounts:
         - name: dshm
           mountPath: /dev/shm
       nodeSelector:
-        nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+        nvidia.com/gpu.product: NVIDIA-A10G
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
       volumes:
       - name: dshm
         emptyDir:
@@ -55,10 +62,10 @@ spec:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: chat-serve
+  name: gpu-serve
   namespace: research
 spec:
   maxUnavailable: 1
   selector:
     matchLabels:
-      app: chat-serve
+      app: gpu-serve

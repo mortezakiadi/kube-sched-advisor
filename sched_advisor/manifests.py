@@ -36,6 +36,8 @@ def pod_spec(ask: WorkloadAsk, *, node_selector: dict, tolerations: list[dict],
         "image": ask.image,
         "resources": resources(ask),
     }
+    if ask.command:
+        container["command"] = list(ask.command)
     if ask.kind.value == "training" and ask.replicas > 1:
         container["env"] = [
             {"name": "WORLD_SIZE", "value": str(ask.replicas)},

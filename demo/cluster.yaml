@@ -1,5 +1,5 @@
-# Throwaway EKS cluster for the recorded demo. Three small CPU nodes; setup.sh makes
-# them advertise 8 GPUs each so the advisor has something to reason about.
+# Throwaway EKS cluster for the recorded demo: three small CPU nodes (setup.sh makes
+# them advertise 8 stand-in GPUs each) plus two real g5.xlarge GPU nodes.
 apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
 metadata:
@@ -15,3 +15,13 @@ managedNodeGroups:
     minSize: 3
     maxSize: 3
     volumeSize: 20
+  # Two real NVIDIA A10G GPU nodes (1 GPU each). The three t3.medium nodes above carry
+  # stand-in H100 capacity; these two carry real GPUs.
+  - name: real-gpu
+    instanceType: g5.xlarge
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 2
+    volumeSize: 60
+    labels:
+      ksa/real-gpu: "true"

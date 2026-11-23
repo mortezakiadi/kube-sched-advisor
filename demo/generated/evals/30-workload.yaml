@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: evals
+  namespace: research
+  labels:
+    team: research
+spec:
+  completionMode: Indexed
+  completions: 4
+  parallelism: 4
+  backoffLimitPerIndex: 2
+  maxFailedIndexes: 1
+  template:
+    metadata:
+      labels:
+        app: evals
+    spec:
+      priorityClassName: research-normal
+      containers:
+      - name: main
+        image: ghcr.io/example/trainer:latest
+        resources:
+          requests:
+            cpu: '1'
+            memory: 1Gi
+            nvidia.com/gpu: 1
+          limits:
+            memory: 1Gi
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+      nodeSelector:
+        nvidia.com/gpu.product: NVIDIA-A10G
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 64Gi
+      restartPolicy: Never
+      subdomain: evals
