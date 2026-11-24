@@ -22,39 +22,38 @@
 - `gpu-binpack` uses MostAllocated with `nvidia.com/gpu` weight 5: fill GPU nodes before touching empty ones, so whole nodes stay free for big jobs and idle nodes can be scaled down. Trade-off: larger blast radius per node, which is why it is a separate profile and services stay on the default scheduler.
 
 ## Findings
-- **BLOCKER - Not enough free GPUs right now.** The ask needs 3 GPUs; 1 are free. Without a queue the pods sit Pending and hold partial capacity. Queue it (Kueue/Volcano) so it is admitted only when capacity exists, or let Karpenter/cluster-autoscaler add nodes.
-- **WARNING - The gang cannot start right now under any scoring strategy.** With gang scheduling the job simply waits (holding nothing) instead of half-starting. To start it sooner: add capacity (Karpenter NodePool / node group for this GPU type), drain stragglers off partially-used nodes (descheduler), or preempt lower-priority work via PriorityClass.
-- **WARNING - Partial placement would deadlock the job.** The default scheduler places pods one at a time: 1/3 workers would start and hold GPUs while waiting for the rest, which may never fit. Gang scheduling is required.
 - **NOTE - EKS: default scheduler config is not editable.** That is why the weights live in a second scheduler selected via `schedulerName`.
 
 ## Simulation (filter -> score -> place, like kube-scheduler)
 ```json
 {
-  "single_pod_filter": "1/7 nodes are available.",
+  "single_pod_filter": "3/8 nodes are available.",
   "default_scheduler": {
-    "placed": "1/3",
+    "placed": "3/3",
     "nodes": [
+      "node-x",
+      "node-x",
       "node-x"
     ],
     "network_domains": [
       "?"
-    ],
-    "first_failure": "0/7 nodes are available: 4 Insufficient nvidia.com/gpu, 3 node(s) didn't match Pod's node affinity/selector."
+    ]
   },
   "binpack_profile": {
-    "placed": "1/3",
+    "placed": "3/3",
     "nodes": [
+      "node-x",
+      "node-x",
       "node-x"
     ],
     "network_domains": [
       "?"
-    ],
-    "first_failure": "0/7 nodes are available: 4 Insufficient nvidia.com/gpu, 3 node(s) didn't match Pod's node affinity/selector."
+    ]
   },
   "gpu_fragmentation": {
-    "free_gpus": 1.0,
+    "free_gpus": 3.0,
     "stranded_gpus": 0.0,
-    "fully_free_nodes": 1,
+    "fully_free_nodes": 3,
     "stranded_ratio": 0.0
   }
 }

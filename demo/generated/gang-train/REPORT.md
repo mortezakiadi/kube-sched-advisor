@@ -30,7 +30,7 @@
 ## Simulation (filter -> score -> place, like kube-scheduler)
 ```json
 {
-  "single_pod_filter": "2/7 nodes are available.",
+  "single_pod_filter": "2/8 nodes are available.",
   "default_scheduler": {
     "placed": "2/3",
     "nodes": [
@@ -40,7 +40,7 @@
     "network_domains": [
       "?"
     ],
-    "first_failure": "0/7 nodes are available: 4 Insufficient nvidia.com/gpu, 3 node(s) didn't match Pod's node affinity/selector."
+    "first_failure": "0/8 nodes are available: 4 node(s) didn't match Pod's node affinity/selector, 4 Insufficient nvidia.com/gpu."
   },
   "binpack_profile": {
     "placed": "2/3",
@@ -51,7 +51,7 @@
     "network_domains": [
       "?"
     ],
-    "first_failure": "0/7 nodes are available: 4 Insufficient nvidia.com/gpu, 3 node(s) didn't match Pod's node affinity/selector."
+    "first_failure": "0/8 nodes are available: 4 node(s) didn't match Pod's node affinity/selector, 4 Insufficient nvidia.com/gpu."
   },
   "gpu_fragmentation": {
     "free_gpus": 2.0,

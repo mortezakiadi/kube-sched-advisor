@@ -1,15 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gpu-serve
+  name: llm-t4
   namespace: research
   labels:
     team: research
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels: &id001
-      app: gpu-serve
+      app: llm-t4
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -26,10 +26,10 @@ spec:
           requests:
             cpu: '1'
             memory: 1Gi
-            nvidia.com/gpu: 1
+            nvidia.com/gpu: 4
           limits:
             memory: 1Gi
-            nvidia.com/gpu: 1
+            nvidia.com/gpu: 4
         command:
         - sleep
         - infinity
@@ -37,7 +37,7 @@ spec:
         - name: dshm
           mountPath: /dev/shm
       nodeSelector:
-        nvidia.com/gpu.product: NVIDIA-A10G
+        nvidia.com/gpu.product: Tesla-T4
       tolerations:
       - key: nvidia.com/gpu
         operator: Exists
@@ -50,7 +50,7 @@ spec:
       topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: topology.kubernetes.io/zone
-        whenUnsatisfiable: DoNotSchedule
+        whenUnsatisfiable: ScheduleAnyway
         labelSelector:
           matchLabels: *id001
       - maxSkew: 1
@@ -58,14 +58,3 @@ spec:
         whenUnsatisfiable: ScheduleAnyway
         labelSelector:
           matchLabels: *id001
----
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: gpu-serve
-  namespace: research
-spec:
-  maxUnavailable: 1
-  selector:
-    matchLabels:
-      app: gpu-serve

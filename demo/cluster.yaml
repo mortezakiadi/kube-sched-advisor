@@ -1,13 +1,15 @@
 # Throwaway EKS cluster for the recorded demo. It has two kinds of GPU node, and the demo
 # labels them so nobody has to guess which is which (label ksa/gpu-kind):
 #
-#   real      4 x g5.xlarge, one real NVIDIA A10G each
+#   real      1 x g4dn.12xlarge  4 NVIDIA T4 on one node
+#             4 x g5.xlarge      1 NVIDIA A10G on each node
 #   stand-in  3 x t3.medium CPU nodes. setup.sh makes each advertise 8 nvidia.com/gpu so the
 #             demo can show 8-GPU, multi-node and network-block scheduling. They have no GPUs
 #             and run nothing but system pods and no-op containers.
 #
-# (A real 4-GPU g5.12xlarge node was tried and AWS had no capacity for it in any zone of
-# us-east-2 at the time of recording; larger real GPU counts need a quota increase.)
+# A 4-GPU g5.12xlarge, g6.12xlarge and g6e.12xlarge were all out of capacity in every zone of
+# us-east-2 when this was recorded, so the 4-GPU node is a g4dn.12xlarge. It is only offered in
+# us-east-2a and us-east-2b, hence the zone restriction on that group.
 apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
 metadata:
@@ -37,5 +39,14 @@ managedNodeGroups:
     minSize: 2
     maxSize: 2
     volumeSize: 60
+    labels:
+      ksa/real-gpu: "true"
+  - name: real-gpu-4x
+    instanceType: g4dn.12xlarge
+    availabilityZones: ["us-east-2a", "us-east-2b"]
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 1
+    volumeSize: 100
     labels:
       ksa/real-gpu: "true"

@@ -1,19 +1,23 @@
 # Demo: kube-sched-advisor on a live Amazon EKS cluster
 
 [`demo.mp4`](demo.mp4) (about 7 minutes, no narration, every step captioned) shows the advisor
-reading a real EKS cluster, explaining why GPU jobs cannot start, and generating manifests. Some
-plans are applied for real on real GPUs. One scenario uses stand-in nodes to show a larger
-8-GPU job. [`TRANSCRIPT.md`](TRANSCRIPT.md) holds the same commands and their real output as text.
+reading a real EKS cluster, explaining why GPU jobs cannot start, and generating manifests. Most
+plans are applied for real on real GPUs. One scenario uses stand-in nodes to show a larger 8-GPU
+job. [`TRANSCRIPT.md`](TRANSCRIPT.md) holds the same commands and their real output as text.
 
 ## The cluster: two kinds of GPU node, each labelled on screen
 
 | Kind | Nodes | What they are |
 |---|---|---|
-| **real** | 4 x `g5.xlarge` | One real NVIDIA A10G each. The NVIDIA device plugin and GPU feature discovery are installed with helm, so GPU counts and the `nvidia.com/gpu.product` label come from real discovery. The nodes carry the usual `nvidia.com/gpu` taint. |
-| **stand-in** | 3 x `t3.medium` | CPU machines with **no GPU**. `setup.sh` sets `nvidia.com/gpu: 8` on each node's status, plus the H100 product label and a network-block label. The scheduler treats that like any other capacity, so the demo can show 8-GPU, multi-node and network-block decisions that four single-GPU nodes cannot. Only no-op containers are ever placed on them. |
+| **real** | 1 x `g4dn.12xlarge` | One node with 4 real NVIDIA T4 GPUs. |
+| **real** | 4 x `g5.xlarge` | One real NVIDIA A10G each. |
+| **stand-in** | 3 x `t3.medium` | CPU machines with **no GPU**. `setup.sh` sets `nvidia.com/gpu: 8` on each node's status, plus the H100 product label and a network-block label. The scheduler treats that like any other capacity, so the demo can show 8-GPU, multi-node and network-block decisions that the real nodes are too small for. Only no-op containers are ever placed on them. |
 
-Every node's kind is the `KIND` column in the first step of the video. Scenarios 1, 2 and 5 use
-only real GPUs. Scenario 3 uses only stand-in nodes. Scenario 4 asks for hardware neither has.
+On the real nodes, the NVIDIA device plugin and GPU feature discovery are installed with helm, so
+GPU counts and the `nvidia.com/gpu.product` label come from real discovery, and the nodes carry the
+usual `nvidia.com/gpu` taint. Every node's kind is the `KIND` column in the first step of the video.
+Scenarios 1, 2 and 5 use only real GPUs. Scenario 3 uses only stand-in nodes. Scenario 4 asks for
+hardware that neither has.
 
 Other teams' jobs are pods that hold GPUs and run a do-nothing image. They carry a priority class
 with the same value as the advisor's "normal" class, so nothing gets preempted. A pod with no
@@ -24,11 +28,11 @@ documents, but it is not the story told here.
 
 | # | GPUs | Scenario | What it shows |
 |---|---|---|---|
-| 1 | real | A 3-worker, all-or-nothing training job while only 2 GPUs are free | The advisor warns that starting 2 of 3 workers would deadlock the job. The same job on the default scheduler does exactly that: two workers start and hold GPUs, the third waits. The advisor's generated second scheduler and PodGroup are applied: all three workers wait and none holds a GPU. After another team's job frees a GPU, the gang starts together and each worker reports its own A10G. |
-| 2 | real | A highly available inference service | A different ask gets a different plan: the default scheduler, zone spread and a PodDisruptionBudget. It is applied for real, and `nvidia-smi` inside a pod shows the A10G. |
-| 3 | stand-in | A big job: 2 nodes x 8 H100, in one network block | The advisor reports fragmentation (18 GPUs free, no node with 8) and no network block with room. A pod submitted to the real kube-scheduler stays `Pending` with `Insufficient nvidia.com/gpu`, the same verdict. After two nodes free up, the same ask fits inside one block and the generated manifests, including the PodGroup, pass a server-side dry run. This shows the scheduling decision, not a GPU workload. |
+| 1 | real A10G | A 3-worker, all-or-nothing training job while only 2 GPUs are free | The advisor warns that starting 2 of 3 workers would deadlock the job. The same job on the default scheduler does exactly that: two workers start and hold GPUs, the third waits. The advisor's generated second scheduler and PodGroup are applied: all three workers wait and none holds a GPU. After another team's job frees a GPU, the gang starts together and each worker reports its own A10G. |
+| 2 | real T4 | One replica that needs 4 GPUs on one node | Another team holds 3 of the T4 node's GPUs, so the advisor says no node can host the replica. After that job finishes, the same ask fits, the plan is applied for real, and `nvidia-smi` inside the pod lists four T4 GPUs. |
+| 3 | stand-in H100 | A big job: 2 nodes x 8 GPUs, in one network block | The advisor reports fragmentation (18 GPUs free, no node with 8) and no network block with room. A pod submitted to the real kube-scheduler stays `Pending` with `Insufficient nvidia.com/gpu`, the same verdict. After two nodes free up, the same ask fits inside one block and the generated manifests, including the PodGroup, pass a server-side dry run. This shows the scheduling decision, not a GPU workload. |
 | 4 | none | Hardware the cluster does not have | An ask for B200 GPUs gets a blocker saying no B200 nodes exist. |
-| 5 | real | The platform team installs Kueue | The advisor detects the Kueue API extensions and changes the plan to queues and quota. The generated queue objects pass a server-side dry run against the real Kueue API. |
+| 5 | real A10G | The platform team installs Kueue | The advisor detects the Kueue API extensions and changes the plan to queues and quota. The generated queue objects pass a server-side dry run against the real Kueue API. |
 
 Generated output for the asks is in [`generated/`](generated/).
 
@@ -49,10 +53,10 @@ could not. They are fixed in the same change:
 
 ## What is real and what is not
 
-- **Real:** the EKS cluster (Kubernetes 1.37), the four A10G GPUs and their discovery, the
-  `kubectl` reads, the default scheduler's behavior, the second scheduler (scheduler-plugins
-  v0.34.7), the gang job, the inference Deployment, the API server's dry-run validation, and the
-  Kueue install (v0.20.7). Every command in the video ran for real; the output was captured and
+- **Real:** the EKS cluster (Kubernetes 1.37), the 8 GPUs on the real nodes and their discovery,
+  the `kubectl` reads, the default scheduler's behavior, the second scheduler (scheduler-plugins
+  v0.34.7), the gang job, the 4-GPU Deployment, the API server's dry-run validation, and the Kueue
+  install (v0.20.7). Every command in the video ran for real; the output was captured and
   redacted, then drawn into the video by `render_video.py`.
 - **Not real:** the 24 GPUs on the three stand-in nodes. Scenario 3's numbers come from a real
   scheduler working on advertised capacity.
@@ -63,19 +67,20 @@ could not. They are fixed in the same change:
   marked as omitted in the transcript. The helm install of the device plugin is in `setup.sh`.
 - **Rule-based translation:** no `ANTHROPIC_API_KEY` was set, so asks were parsed by the offline
   rule-based parser. The asks say `1 cpu and 1 GiB per pod` so that pods fit the small nodes.
-- **Not covered:** Kueue's plan is validated but not run, and real multi-GPU nodes and NVLink are
-  not covered. A real 4-GPU `g5.12xlarge` node was tried and AWS had no capacity for it in any
-  zone of the region at the time. Larger real GPU counts also need a vCPU quota increase.
+- **Not covered:** Kueue's plan is validated but not run, and NVLink is not covered. The T4 node
+  is `g4dn.12xlarge` because `g5.12xlarge`, `g6.12xlarge` and `g6e.12xlarge` were all out of
+  capacity in every zone of the region when this was recorded. A real 8-GPU node needs a far
+  larger vCPU quota than the account has.
 - **Version:** the README targets Kubernetes 1.33-1.35. EKS provisioned 1.37 by default. The
   advisor and scheduler-plugins v0.34.7 worked against it, but 1.36+ is not covered by the
   version matrix yet.
 
 ## Reproduce it
 
-Needs `eksctl`, `kubectl`, `helm`, AWS credentials for a throwaway account with quota for four
-`g5.xlarge` instances (16 vCPUs of the "Running On-Demand G and VT instances" quota), Python 3.10+,
-Pillow and `ffmpeg`. The cluster costs roughly $5 an hour (EKS control plane, three `t3.medium`
-and four `g5.xlarge` nodes, at on-demand list prices).
+Needs `eksctl`, `kubectl`, `helm`, AWS credentials for a throwaway account with quota for 64 vCPUs
+of "Running On-Demand G and VT instances" (one `g4dn.12xlarge` and four `g5.xlarge`), Python 3.10+,
+Pillow and `ffmpeg`. The nodes cost about $8 an hour at on-demand list prices in us-east-2 ($3.91 for the
+`g4dn.12xlarge`, $1.01 for each `g5.xlarge`, $0.04 for each `t3.medium`), plus the EKS control-plane fee.
 
 ```bash
 eksctl create cluster -f demo/cluster.yaml --install-nvidia-plugin=false --kubeconfig /tmp/ksa-kubeconfig

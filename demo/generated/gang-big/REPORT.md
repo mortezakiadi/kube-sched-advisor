@@ -27,7 +27,7 @@
 ## Simulation (filter -> score -> place, like kube-scheduler)
 ```json
 {
-  "single_pod_filter": "2/7 nodes are available.",
+  "single_pod_filter": "2/8 nodes are available.",
   "default_scheduler": {
     "placed": "2/2",
     "nodes": [
