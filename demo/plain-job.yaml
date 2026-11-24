@@ -10,6 +10,8 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      nodeSelector:
+        nvidia.com/gpu.product: NVIDIA-A10G
       tolerations:
       - {key: nvidia.com/gpu, operator: Exists, effect: NoSchedule}
       containers:

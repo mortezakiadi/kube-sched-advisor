@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gang-big
+  namespace: research
+spec:
+  clusterIP: None
+  selector:
+    job-name: gang-big
+  ports:
+  - name: rendezvous
+    port: 29500
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gang-big
+  namespace: research
+  labels:
+    team: research
+spec:
+  completionMode: Indexed
+  completions: 2
+  parallelism: 2
+  backoffLimitPerIndex: 0
+  maxFailedIndexes: 0
+  podFailurePolicy:
+    rules:
+    - action: Ignore
+      onPodConditions:
+      - type: DisruptionTarget
+        status: 'True'
+  template:
+    metadata:
+      labels:
+        app: gang-big
+        scheduling.x-k8s.io/pod-group: gang-big
+    spec:
+      priorityClassName: research-normal
+      containers:
+      - name: main
+        image: ghcr.io/example/trainer:latest
+        resources:
+          requests:
+            cpu: '1'
+            memory: 1Gi
+            nvidia.com/gpu: 8
+          limits:
+            memory: 1Gi
+            nvidia.com/gpu: 8
+        env:
+        - name: WORLD_SIZE
+          value: '2'
+        - name: MASTER_ADDR
+          value: gang-big-0.gang-big
+        - name: MASTER_PORT
+          value: '29500'
+        ports:
+        - containerPort: 29500
+          name: rendezvous
+        volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+      nodeSelector:
+        nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      schedulerName: gang-scheduler
+      volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 64Gi
+      restartPolicy: Never
+      subdomain: gang-big

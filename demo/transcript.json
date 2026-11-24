@@ -4,32 +4,33 @@
     "lines": [
       "Describe a workload in plain English. Get a scheduling plan from your live cluster.",
       "Recorded on a real Amazon EKS cluster. No narration: each step has a caption.",
-      "Every GPU is real: 4 NVIDIA A10G, one on each of four nodes."
+      "4 real NVIDIA A10G GPUs, plus 3 stand-in nodes that advertise 8 GPUs each but have none.",
+      "Every node is labelled real or stand-in on screen."
     ],
-    "seconds": 9
+    "seconds": 11
   },
   "steps": [
     {
-      "caption": "Four GPU nodes with one real NVIDIA A10G GPU each.",
-      "command": "kubectl get nodes -l ksa/real-gpu=true -o custom-columns='NODE:.metadata.name,TYPE:.metadata.labels.node\\.kubernetes\\.io/instance-type,GPUS:.status.allocatable.nvidia\\.com/gpu,GPU-PRODUCT:.metadata.labels.nvidia\\.com/gpu\\.product'",
-      "output": "NODE                                           TYPE        GPUS   GPU-PRODUCT\ngpu-node-1                                     g5.xlarge   1      NVIDIA-A10G\ngpu-node-2                                     g5.xlarge   1      NVIDIA-A10G\ngpu-node-3                                     g5.xlarge   1      NVIDIA-A10G\ngpu-node-4                                     g5.xlarge   1      NVIDIA-A10G",
-      "min_hold": 0,
+      "caption": "Seven GPU nodes. Four have one real A10G each. Three are stand-ins: CPU machines that advertise 8 GPUs and have none.",
+      "command": "kubectl get nodes -l nvidia.com/gpu.product -o custom-columns='NODE:.metadata.name,KIND:.metadata.labels.ksa/gpu-kind,TYPE:.metadata.labels.node\\.kubernetes\\.io/instance-type,GPUS:.status.allocatable.nvidia\\.com/gpu,GPU-PRODUCT:.metadata.labels.nvidia\\.com/gpu\\.product'",
+      "output": "NODE                                           KIND       TYPE        GPUS   GPU-PRODUCT\ngpu-node-1                                     real       g5.xlarge   1      NVIDIA-A10G\nstandin-node-1                                 stand-in   t3.medium   8      NVIDIA-H100-80GB-HBM3\nstandin-node-2                                 stand-in   t3.medium   8      NVIDIA-H100-80GB-HBM3\ngpu-node-2                                     real       g5.xlarge   1      NVIDIA-A10G\ngpu-node-3                                     real       g5.xlarge   1      NVIDIA-A10G\nstandin-node-3                                 stand-in   t3.medium   8      NVIDIA-H100-80GB-HBM3\ngpu-node-4                                     real       g5.xlarge   1      NVIDIA-A10G",
+      "min_hold": 9,
       "section": {
         "title": "The cluster",
-        "subtitle": "A real EKS cluster. All 4 GPUs are real NVIDIA A10G."
+        "subtitle": "4 real A10G GPUs, plus 3 stand-in nodes. Every node is labelled."
       }
     },
     {
-      "caption": "Other teams already run jobs on 2 of the 4 GPUs. Two are free, on two different nodes.",
+      "caption": "Other teams run jobs on both kinds of node: 1 GPU on two real nodes, and 2 of the 8 stand-in GPUs on each stand-in node.",
       "command": "kubectl get pods -n other-teams -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName,GPUS-HELD:.spec.containers[0].resources.requests.nvidia\\.com/gpu'",
-      "output": "POD            NODE                                           GPUS-HELD\nother-team-a   gpu-node-1                                     1\nother-team-b   gpu-node-2                                     1",
-      "min_hold": 0
+      "output": "POD                  NODE                                           GPUS-HELD\nother-team-a         gpu-node-1                                     1\nother-team-b         gpu-node-2                                     1\nstandin-team-job-0   standin-node-1                                 2\nstandin-team-job-1   standin-node-2                                 2\nstandin-team-job-2   standin-node-3                                 2",
+      "min_hold": 7
     },
     {
       "caption": "The advisor reads the live cluster through kubectl. Nothing is changed.",
       "command": "python -m sched_advisor status",
-      "output": "Kubernetes 1.37 on EKS\nInstalled add-ons: none\nNetwork topology label: none\nNode pools:\n- 1x cpu-only in us-east-2c: 0 GPU/node, 0 GPUs free, 0 fully-free nodes, 1.575 CPU free, taints=none\n- 1x NVIDIA-A10G (NVIDIA-A10G) in us-east-2c: 1 GPU/node, 0 GPUs free, 0 fully-free nodes, 3.545 CPU free, taints=['nvidia.com/gpu']\n- 1x cpu-only in us-east-2a: 0 GPU/node, 0 GPUs free, 0 fully-free nodes, 1.775 CPU free, taints=none\n- 1x NVIDIA-A10G (NVIDIA-A10G) in us-east-2a: 1 GPU/node, 0 GPUs free, 0 fully-free nodes, 3.755 CPU free, taints=['nvidia.com/gpu']\n- 2x NVIDIA-A10G (NVIDIA-A10G) in us-east-2b: 1 GPU/node, 2 GPUs free, 2 fully-free nodes, 7.43 CPU free, taints=['nvidia.com/gpu']\n- 1x cpu-only in us-east-2b: 0 GPU/node, 0 GPUs free, 0 fully-free nodes, 1.775 CPU free, taints=none",
-      "min_hold": 0
+      "output": "Kubernetes 1.37 on EKS\nInstalled add-ons: none\nNetwork topology label: network.topology/block\nNode pools:\n- 2x NVIDIA-A10G (NVIDIA-A10G) in us-east-2b: 1 GPU/node, 0 GPUs free, 0 fully-free nodes, 7.3 CPU free, taints=['nvidia.com/gpu']\n- 1x NVIDIA-H100-80GB-HBM3 (NVIDIA-H100-80GB-HBM3) in us-east-2b: 8 GPU/node, 6 GPUs free, 0 fully-free nodes, 1.765 CPU free, taints=none\n- 1x NVIDIA-H100-80GB-HBM3 (NVIDIA-H100-80GB-HBM3) in us-east-2a: 8 GPU/node, 6 GPUs free, 0 fully-free nodes, 1.765 CPU free, taints=none\n- 2x NVIDIA-A10G (NVIDIA-A10G) in us-east-2c: 1 GPU/node, 2 GPUs free, 2 fully-free nodes, 7.23 CPU free, taints=['nvidia.com/gpu']\n- 1x NVIDIA-H100-80GB-HBM3 (NVIDIA-H100-80GB-HBM3) in us-east-2c: 8 GPU/node, 6 GPUs free, 0 fully-free nodes, 1.765 CPU free, taints=none",
+      "min_hold": 8
     },
     {
       "caption": "The ask, in plain English. The advisor warns that starting 2 of 3 workers would deadlock the job.",
@@ -37,14 +38,14 @@
       "output": "Recommended: Secondary scheduler gang-scheduler (scheduler-plugins Coscheduling + GPU bin-packing)\n\nWhy:\n  - Pin to nvidia.com/gpu.product=NVIDIA-A10G so the pod only lands on A10G nodes.\n  - Add tolerations for GPU-node taints (taints keep CPU pods off GPUs; a toleration only allows\n    placement, it does not attract the pod - the nodeSelector/requests do that).\n  - No batch system is installed, so the lightest gang option is the Coscheduling plugin from\n    kubernetes-sigs/scheduler-plugins.\n  - It runs as a second scheduler: the default scheduler is untouched (required on EKS, where the\n    default scheduler's config cannot be edited).\n\nFindings:\n  BLOCKER: Not enough free GPUs right now.\n  WARNING: The gang cannot start right now under any scoring strategy.\n  WARNING: Partial placement would deadlock the job.\n  NOTE: Coscheduling does not wake up when GPUs free up.\n  NOTE: EKS: default scheduler config is not editable.\n\nSimulation: default scheduler places 2/3 pods; 2 GPUs free, 2 whole nodes free\n\nManifests and the full report: out/gang-train/",
       "min_hold": 14,
       "section": {
-        "title": "Scenario 1: a training job that must start all at once",
-        "subtitle": "3 workers, 1 GPU each. Only 2 GPUs are free."
+        "title": "Scenario 1: a training job that must start all at once (real GPUs)",
+        "subtitle": "Real GPUs. 3 workers, 1 GPU each. Only 2 real GPUs are free."
       }
     },
     {
       "caption": "The same job on the default scheduler, for real: two workers start and hold GPUs. The third waits.",
       "command": "kubectl apply -f demo/plain-job.yaml && sleep 15 && kubectl get pods -l job-name=plain-train -o custom-columns='POD:.metadata.name,STATUS:.status.phase,NODE:.spec.nodeName'",
-      "output": "job.batch/plain-train created\nPOD                 STATUS    NODE\nplain-train-m2ffr   Running   gpu-node-4                                 \nplain-train-tdb6r   Pending   <none>\nplain-train-vbx45   Running   gpu-node-3                                  ",
+      "output": "job.batch/plain-train created\nPOD                 STATUS    NODE\nplain-train-bcmn2   Running   gpu-node-4                                  \nplain-train-tmj5n   Running   gpu-node-3                                  \nplain-train-tp9qp   Pending   <none>",
       "min_hold": 8
     },
     {
@@ -56,13 +57,13 @@
     {
       "caption": "Apply what the advisor generated: a second scheduler with the Coscheduling plugin, and a PodGroup for the job.",
       "command": "kubectl create namespace research && kubectl apply -f out/gang-train/00-priorityclass.yaml -f out/gang-train/10-scheduler.yaml -f out/gang-train/20-podgroup.yaml && kubectl rollout status -n kube-system deploy/gang-scheduler --timeout=180s",
-      "output": "namespace/research created\npriorityclass.scheduling.k8s.io/research-normal created\nserviceaccount/gang-scheduler created\nclusterrolebinding.rbac.authorization.k8s.io/gang-scheduler-kube-scheduler created\nclusterrolebinding.rbac.authorization.k8s.io/gang-scheduler-volume-scheduler created\nrolebinding.rbac.authorization.k8s.io/gang-scheduler-auth-reader created\nrole.rbac.authorization.k8s.io/gang-scheduler-leader-election created\nrolebinding.rbac.authorization.k8s.io/gang-scheduler-leader-election created\nclusterrole.rbac.authorization.k8s.io/gang-scheduler-podgroups created\nclusterrolebinding.rbac.authorization.k8s.io/gang-scheduler-podgroups created\nconfigmap/gang-scheduler-config created\ndeployment.apps/gang-scheduler created\npodgroup.scheduling.x-k8s.io/gang-train created\ndeployment \"gang-scheduler\" successfully rolled out",
+      "output": "namespace/research created\npriorityclass.scheduling.k8s.io/research-normal created\nserviceaccount/gang-scheduler created\nclusterrolebinding.rbac.authorization.k8s.io/gang-scheduler-kube-scheduler created\nclusterrolebinding.rbac.authorization.k8s.io/gang-scheduler-volume-scheduler created\nrolebinding.rbac.authorization.k8s.io/gang-scheduler-auth-reader created\nrole.rbac.authorization.k8s.io/gang-scheduler-leader-election created\nrolebinding.rbac.authorization.k8s.io/gang-scheduler-leader-election created\nclusterrole.rbac.authorization.k8s.io/gang-scheduler-podgroups created\nclusterrolebinding.rbac.authorization.k8s.io/gang-scheduler-podgroups created\nconfigmap/gang-scheduler-config created\ndeployment.apps/gang-scheduler created\npodgroup.scheduling.x-k8s.io/gang-train created\nWaiting for deployment \"gang-scheduler\" rollout to finish: 0 of 2 updated replicas are available...\nWaiting for deployment \"gang-scheduler\" rollout to finish: 1 of 2 updated replicas are available...\ndeployment \"gang-scheduler\" successfully rolled out",
       "min_hold": 7
     },
     {
       "caption": "Submit the job. All three workers wait, and none holds a GPU. Two are free, three are needed.",
       "command": "kubectl apply -f out/gang-train/30-workload.yaml && sleep 25 && kubectl get pods -n research -o custom-columns='POD:.metadata.name,STATUS:.status.phase,NODE:.spec.nodeName'",
-      "output": "service/gang-train created\njob.batch/gang-train created\nPOD                  STATUS    NODE\ngang-train-0-rpdkf   Pending   <none>\ngang-train-1-zrkn5   Pending   <none>\ngang-train-2-tvjng   Pending   <none>",
+      "output": "service/gang-train created\njob.batch/gang-train created\nPOD                  STATUS    NODE\ngang-train-0-xfjlp   Pending   <none>\ngang-train-1-nwhnf   Pending   <none>\ngang-train-2-cgqmf   Pending   <none>",
       "min_hold": 8
     },
     {
@@ -74,7 +75,7 @@
     {
       "caption": "The gang scheduler retries on new pods and on a 5-minute timer, not when a GPU frees up. Still waiting.",
       "command": "sleep 20 && kubectl get pods -n research -o custom-columns='POD:.metadata.name,STATUS:.status.phase,NODE:.spec.nodeName'",
-      "output": "POD                  STATUS    NODE\ngang-train-0-rpdkf   Pending   <none>\ngang-train-1-zrkn5   Pending   <none>\ngang-train-2-tvjng   Pending   <none>",
+      "output": "POD                  STATUS    NODE\ngang-train-0-xfjlp   Pending   <none>\ngang-train-1-nwhnf   Pending   <none>\ngang-train-2-cgqmf   Pending   <none>",
       "min_hold": 7
     },
     {
@@ -86,7 +87,7 @@
     {
       "caption": "All three workers start together, each on its own real GPU.",
       "command": "kubectl wait --for=condition=complete job/gang-train -n research --timeout=300s && kubectl logs -n research -l job-name=gang-train --prefix",
-      "output": "job.batch/gang-train condition met\n[pod/gang-train-2-tvjng/main] GPU 0: NVIDIA A10G (UUID: GPU-<id>)\n[pod/gang-train-0-rpdkf/main] GPU 0: NVIDIA A10G (UUID: GPU-<id>)\n[pod/gang-train-1-zrkn5/main] GPU 0: NVIDIA A10G (UUID: GPU-<id>)",
+      "output": "job.batch/gang-train condition met\n[pod/gang-train-0-xfjlp/main] GPU 0: NVIDIA A10G (UUID: GPU-<id>)\n[pod/gang-train-1-nwhnf/main] GPU 0: NVIDIA A10G (UUID: GPU-<id>)\n[pod/gang-train-2-cgqmf/main] GPU 0: NVIDIA A10G (UUID: GPU-<id>)",
       "min_hold": 9
     },
     {
@@ -95,7 +96,7 @@
       "output": "Recommended: Default kube-scheduler + spreading (Deployment, topology spread, PDB)\n\nWhy:\n  - Pin to nvidia.com/gpu.product=NVIDIA-A10G so the pod only lands on A10G nodes.\n  - Add tolerations for GPU-node taints (taints keep CPU pods off GPUs; a toleration only allows\n    placement, it does not attract the pod - the nodeSelector/requests do that).\n  - Serving needs availability, not packing: keep the default LeastAllocated scoring so replicas\n    spread out and a single node failure costs one replica.\n  - Topology spread across topology.kubernetes.io/zone is hard (DoNotSchedule) because this is\n    critical.\n  - A PodDisruptionBudget keeps node drains/Karpenter consolidation from taking out several replicas\n    at once.\n\nSimulation: default scheduler places 2/2 pods; 3 GPUs free, 3 whole nodes free\n\nManifests and the full report: out/gpu-serve/",
       "min_hold": 12,
       "section": {
-        "title": "Scenario 2: a highly available inference service",
+        "title": "Scenario 2: a highly available inference service (real GPUs)",
         "subtitle": "2 replicas, 1 GPU each. A different ask gets a different plan, applied for real."
       }
     },
@@ -108,7 +109,7 @@
     {
       "caption": "Both replicas are running, each on its own node.",
       "command": "kubectl get pods -n research -l app=gpu-serve -o custom-columns='POD:.metadata.name,STATUS:.status.phase,NODE:.spec.nodeName'",
-      "output": "POD                          STATUS    NODE\ngpu-serve-6bb6f49bfb-btxss   Running   gpu-node-2                                  \ngpu-serve-6bb6f49bfb-fsw8q   Running   gpu-node-3                                  ",
+      "output": "POD                          STATUS    NODE\ngpu-serve-6bb6f49bfb-6fqk2   Running   gpu-node-2                                \ngpu-serve-6bb6f49bfb-p4g4w   Running   gpu-node-4                                  ",
       "min_hold": 6
     },
     {
@@ -118,22 +119,56 @@
       "min_hold": 7
     },
     {
-      "caption": "An ask for B200 GPUs. This cluster has A10G GPUs only.",
+      "caption": "The ask: 2 nodes with 8 H100 GPUs each. Other teams hold 2 stand-in GPUs on every node, so 18 are free but no node has 8.",
+      "command": "python -m sched_advisor suggest --brief --name gang-big \"2 nodes x 8 H100 GPUs per node, NVLink, all-or-nothing fine-tune, 1 cpu and 1 GiB per pod\"",
+      "output": "Recommended: Secondary scheduler gang-scheduler (scheduler-plugins Coscheduling + GPU bin-packing)\n\nWhy:\n  - Pin to nvidia.com/gpu.product=NVIDIA-H100-80GB-HBM3 so the pod only lands on H100 nodes.\n  - Add tolerations for GPU-node taints (taints keep CPU pods off GPUs; a toleration only allows\n    placement, it does not attract the pod - the nodeSelector/requests do that).\n  - No batch system is installed, so the lightest gang option is the Coscheduling plugin from\n    kubernetes-sigs/scheduler-plugins.\n  - It runs as a second scheduler: the default scheduler is untouched (required on EKS, where the\n    default scheduler's config cannot be edited).\n\nFindings:\n  BLOCKER: No node can run even one pod.\n  WARNING: Enough GPUs in total, but they are fragmented.\n  WARNING: The gang cannot start right now under any scoring strategy.\n  WARNING: No single network domain can host the whole job.\n  NOTE: Coscheduling does not wake up when GPUs free up.\n  NOTE: EKS: default scheduler config is not editable.\n\nSimulation: default scheduler places 0/2 pods; no single network.topology/block has room for the\n            whole job; 18 GPUs free, 0 whole nodes free\n\nManifests and the full report: out/gang-big/",
+      "min_hold": 14,
+      "section": {
+        "title": "Scenario 3: a big job on the stand-in H100 nodes",
+        "subtitle": "2 nodes x 8 GPUs in one network block. Stand-in nodes show the scheduling decision, not a GPU workload."
+      }
+    },
+    {
+      "caption": "The real kube-scheduler agrees: a pod that wants a whole 8-GPU node stays Pending.",
+      "command": "kubectl apply -f demo/probe-pod.yaml && sleep 8 && kubectl get pod train-probe && kubectl get events --field-selector involvedObject.name=train-probe,reason=FailedScheduling -o custom-columns=MESSAGE:.message --no-headers",
+      "output": "pod/train-probe created\nNAME          READY   STATUS    RESTARTS   AGE\ntrain-probe   0/1     Pending   0          10s\n0/7 nodes are available: 7 Insufficient nvidia.com/gpu. preemption: 0/7 nodes are available: 3 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.",
+      "min_hold": 8
+    },
+    {
+      "caption": "Two stand-in nodes are freed.",
+      "command": "kubectl delete pod train-probe && kubectl delete pod -n other-teams standin-team-job-0 standin-team-job-1",
+      "output": "pod \"train-probe\" deleted from default namespace\npod \"standin-team-job-0\" deleted from other-teams namespace\npod \"standin-team-job-1\" deleted from other-teams namespace",
+      "min_hold": 0
+    },
+    {
+      "caption": "Same ask, new cluster state: both workers fit, inside one network block.",
+      "command": "python -m sched_advisor suggest --brief --name gang-big \"2 nodes x 8 H100 GPUs per node, NVLink, all-or-nothing fine-tune, 1 cpu and 1 GiB per pod\"",
+      "output": "Recommended: Secondary scheduler gang-scheduler (scheduler-plugins Coscheduling + GPU bin-packing)\n\nWhy:\n  - Pin to nvidia.com/gpu.product=NVIDIA-H100-80GB-HBM3 so the pod only lands on H100 nodes.\n  - Add tolerations for GPU-node taints (taints keep CPU pods off GPUs; a toleration only allows\n    placement, it does not attract the pod - the nodeSelector/requests do that).\n  - No batch system is installed, so the lightest gang option is the Coscheduling plugin from\n    kubernetes-sigs/scheduler-plugins.\n  - It runs as a second scheduler: the default scheduler is untouched (required on EKS, where the\n    default scheduler's config cannot be edited).\n\nFindings:\n  NOTE: Coscheduling does not wake up when GPUs free up.\n  NOTE: EKS: default scheduler config is not editable.\n\nSimulation: default scheduler places 2/2 pods; whole job fits in one network.topology/block:\n            block-a; 22 GPUs free, 2 whole nodes free\n\nManifests and the full report: out/gang-big/",
+      "min_hold": 14
+    },
+    {
+      "caption": "The real API server validates the generated manifests, including the PodGroup. Nothing is created.",
+      "command": "kubectl apply --dry-run=server -f out/gang-big/00-priorityclass.yaml -f out/gang-big/20-podgroup.yaml -f out/gang-big/30-workload.yaml",
+      "output": "priorityclass.scheduling.k8s.io/research-normal configured (server dry run)\npodgroup.scheduling.x-k8s.io/gang-big created (server dry run)\nservice/gang-big created (server dry run)\njob.batch/gang-big created (server dry run)",
+      "min_hold": 7
+    },
+    {
+      "caption": "An ask for B200 GPUs. This cluster has A10G and H100-class capacity only.",
       "command": "python -m sched_advisor suggest --brief --name train-b200 \"train on 2 nodes with 8 B200 GPUs per node, all-or-nothing\"",
-      "output": "Recommended: Secondary scheduler gang-scheduler (scheduler-plugins Coscheduling + GPU bin-packing)\n\nWhy:\n  - Add tolerations for GPU-node taints (taints keep CPU pods off GPUs; a toleration only allows\n    placement, it does not attract the pod - the nodeSelector/requests do that).\n  - No batch system is installed, so the lightest gang option is the Coscheduling plugin from\n    kubernetes-sigs/scheduler-plugins.\n  - It runs as a second scheduler: the default scheduler is untouched (required on EKS, where the\n    default scheduler's config cannot be edited).\n\nFindings:\n  BLOCKER: No B200 nodes found.\n  BLOCKER: No node can run even one pod.\n  WARNING: The gang cannot start right now under any scoring strategy.\n  NOTE: Coscheduling does not wake up when GPUs free up.\n  NOTE: EKS: default scheduler config is not editable.\n\nSimulation: default scheduler places 0/2 pods; 1 GPUs free, 1 whole nodes free\n\nManifests and the full report: out/train-b200/",
+      "output": "Recommended: Secondary scheduler gang-scheduler (scheduler-plugins Coscheduling + GPU bin-packing)\n\nWhy:\n  - Add tolerations for GPU-node taints (taints keep CPU pods off GPUs; a toleration only allows\n    placement, it does not attract the pod - the nodeSelector/requests do that).\n  - No batch system is installed, so the lightest gang option is the Coscheduling plugin from\n    kubernetes-sigs/scheduler-plugins.\n  - It runs as a second scheduler: the default scheduler is untouched (required on EKS, where the\n    default scheduler's config cannot be edited).\n\nFindings:\n  BLOCKER: No B200 nodes found.\n  BLOCKER: No node can run even one pod.\n  WARNING: The gang cannot start right now under any scoring strategy.\n  NOTE: Coscheduling does not wake up when GPUs free up.\n  NOTE: EKS: default scheduler config is not editable.\n\nSimulation: default scheduler places 0/2 pods; 23 GPUs free, 3 whole nodes free\n\nManifests and the full report: out/train-b200/",
       "min_hold": 12,
       "section": {
-        "title": "Scenario 3: asking for hardware the cluster does not have",
+        "title": "Scenario 4: asking for hardware the cluster does not have",
         "subtitle": "The advisor should say so instead of generating a job that never starts."
       }
     },
     {
       "caption": "Kueue is installed on the cluster. The advisor detects it from the cluster's API extensions.",
       "command": "kubectl get pods -n kueue-system && kubectl get crd clusterqueues.kueue.x-k8s.io",
-      "output": "NAME                                        READY   STATUS    RESTARTS   AGE\nkueue-controller-manager-5f58576dcf-7c2db   1/1     Running   0          13s\nNAME                           SCOPE     VERSIONS           CREATED AT\nclusterqueues.kueue.x-k8s.io   Cluster   v1beta2(storage)   2026-11-23T20:02:52Z",
+      "output": "NAME                                        READY   STATUS    RESTARTS   AGE\nkueue-controller-manager-5f58576dcf-km4sv   1/1     Running   0          17s\nNAME                           SCOPE     VERSIONS           CREATED AT\nclusterqueues.kueue.x-k8s.io   Cluster   v1beta2(storage)   2026-11-24T00:12:02Z",
       "min_hold": 6,
       "section": {
-        "title": "Scenario 4: the platform team installs Kueue",
+        "title": "Scenario 5: the platform team installs Kueue",
         "subtitle": "The advisor notices and changes its plan."
       }
     },

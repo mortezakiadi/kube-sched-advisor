@@ -21,7 +21,7 @@
 
 [kube-scheduler-simulator](https://github.com/kubernetes-sigs/kube-scheduler-simulator) answers the question *"where would this pod go?"* This tool answers a different one: *"I need X. What should I write, and which scheduler should I use?"*
 
-**Demo:** a 5-minute captioned recording on a live Amazon EKS cluster (four real A10G GPU nodes, a real gang scheduler, Kueue), with the transcript and generated manifests, is in [`demo/`](demo/README.md).
+**Demo:** a 7-minute captioned recording on a live Amazon EKS cluster (four real A10G GPU nodes, three labelled stand-in H100 nodes, a real gang scheduler, Kueue), with the transcript and generated manifests, is in [`demo/`](demo/README.md).
 
 ## Quick start
 

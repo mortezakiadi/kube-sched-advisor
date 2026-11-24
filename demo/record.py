@@ -36,26 +36,30 @@ ASK_GANG_KUEUE = ADVISOR + (' --name gang-kueue "train on 3 workers, 1 A10G GPU 
                             'shared pool with other teams, 1 cpu and 1 GiB per pod"')
 ASK_SERVE = ADVISOR + (f' --name gpu-serve --image {CUDA} --command "sleep infinity" '
                        '"serve a chat model, 2 replicas, 1 A10G GPU each, highly available, 1 cpu and 1 GiB per pod"')
+ASK_BIG = ADVISOR + (' --name gang-big "2 nodes x 8 H100 GPUs per node, NVLink, all-or-nothing fine-tune, '
+                     '1 cpu and 1 GiB per pod"')
 ASK_B200 = ADVISOR + ' --name train-b200 "train on 2 nodes with 8 B200 GPUs per node, all-or-nothing"'
 
 ROWS_PODS = "custom-columns='POD:.metadata.name,STATUS:.status.phase,NODE:.spec.nodeName'"
 
 STEPS = [
     # ---------------------------------------------------------------- the cluster
-    dict(section=("The cluster", "A real EKS cluster. All 4 GPUs are real NVIDIA A10G."),
-         caption="Four GPU nodes with one real NVIDIA A10G GPU each.",
-         command="kubectl get nodes -l ksa/real-gpu=true -o custom-columns='NODE:.metadata.name,"
+    dict(section=("The cluster", "4 real A10G GPUs, plus 3 stand-in nodes. Every node is labelled."),
+         caption="Seven GPU nodes. Four have one real A10G each. Three are stand-ins: CPU machines that advertise 8 GPUs and have none.",
+         command="kubectl get nodes -l nvidia.com/gpu.product -o custom-columns='NODE:.metadata.name,KIND:.metadata.labels.ksa/gpu-kind,"
                  "TYPE:.metadata.labels.node\\.kubernetes\\.io/instance-type,GPUS:.status.allocatable.nvidia\\.com/gpu,"
-                 "GPU-PRODUCT:.metadata.labels.nvidia\\.com/gpu\\.product'"),
-    dict(caption="Other teams already run jobs on 2 of the 4 GPUs. Two are free, on two different nodes.",
+                 "GPU-PRODUCT:.metadata.labels.nvidia\\.com/gpu\\.product'",
+         min_hold=9),
+    dict(caption="Other teams run jobs on both kinds of node: 1 GPU on two real nodes, and 2 of the 8 stand-in GPUs on each stand-in node.",
          command="kubectl get pods -n other-teams -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName,"
-                 "GPUS-HELD:.spec.containers[0].resources.requests.nvidia\\.com/gpu'"),
+                 "GPUS-HELD:.spec.containers[0].resources.requests.nvidia\\.com/gpu'",
+         min_hold=7),
     dict(caption="The advisor reads the live cluster through kubectl. Nothing is changed.",
-         command="python -m sched_advisor status"),
+         command="python -m sched_advisor status", min_hold=8),
 
     # ---------------------------------------------------------------- scenario 1
-    dict(section=("Scenario 1: a training job that must start all at once",
-                  "3 workers, 1 GPU each. Only 2 GPUs are free."),
+    dict(section=("Scenario 1: a training job that must start all at once (real GPUs)",
+                  "Real GPUs. 3 workers, 1 GPU each. Only 2 real GPUs are free."),
          caption="The ask, in plain English. The advisor warns that starting 2 of 3 workers would deadlock the job.",
          command=ASK_GANG, min_hold=14),
     dict(caption="The same job on the default scheduler, for real: two workers start and hold GPUs. The third waits.",
@@ -87,7 +91,7 @@ STEPS = [
          min_hold=9),
 
     # ---------------------------------------------------------------- scenario 2
-    dict(section=("Scenario 2: a highly available inference service",
+    dict(section=("Scenario 2: a highly available inference service (real GPUs)",
                   "2 replicas, 1 GPU each. A different ask gets a different plan, applied for real."),
          caption="A serving ask. No gang scheduler this time: the default scheduler, zone spread and a disruption budget.",
          command=ASK_SERVE, min_hold=12),
@@ -102,14 +106,33 @@ STEPS = [
          command="kubectl exec -n research deploy/gpu-serve -- nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv",
          min_hold=7),
 
+    # ---------------------------------------------------------------- scenario 3 (stand-in)
+    dict(section=("Scenario 3: a big job on the stand-in H100 nodes",
+                  "2 nodes x 8 GPUs in one network block. Stand-in nodes show the scheduling decision, not a GPU workload."),
+         caption="The ask: 2 nodes with 8 H100 GPUs each. Other teams hold 2 stand-in GPUs on every node, so 18 are free but no node has 8.",
+         command=ASK_BIG, min_hold=14),
+    dict(caption="The real kube-scheduler agrees: a pod that wants a whole 8-GPU node stays Pending.",
+         command="kubectl apply -f demo/probe-pod.yaml && sleep 8 && kubectl get pod train-probe && "
+                 "kubectl get events --field-selector involvedObject.name=train-probe,reason=FailedScheduling "
+                 "-o custom-columns=MESSAGE:.message --no-headers",
+         min_hold=8),
+    dict(caption="Two stand-in nodes are freed.",
+         command="kubectl delete pod train-probe && kubectl delete pod -n other-teams standin-team-job-0 standin-team-job-1"),
+    dict(caption="Same ask, new cluster state: both workers fit, inside one network block.",
+         command=ASK_BIG, min_hold=14),
+    dict(caption="The real API server validates the generated manifests, including the PodGroup. Nothing is created.",
+         command="kubectl apply --dry-run=server -f out/gang-big/00-priorityclass.yaml -f out/gang-big/20-podgroup.yaml "
+                 "-f out/gang-big/30-workload.yaml",
+         min_hold=7),
+
     # ---------------------------------------------------------------- scenario 3
-    dict(section=("Scenario 3: asking for hardware the cluster does not have",
+    dict(section=("Scenario 4: asking for hardware the cluster does not have",
                   "The advisor should say so instead of generating a job that never starts."),
-         caption="An ask for B200 GPUs. This cluster has A10G GPUs only.",
+         caption="An ask for B200 GPUs. This cluster has A10G and H100-class capacity only.",
          command=ASK_B200, min_hold=12),
 
     # ---------------------------------------------------------------- scenario 4
-    dict(section=("Scenario 4: the platform team installs Kueue",
+    dict(section=("Scenario 5: the platform team installs Kueue",
                   "The advisor notices and changes its plan."),
          caption="Kueue is installed on the cluster. The advisor detects it from the cluster's API extensions.",
          command="kubectl get pods -n kueue-system && kubectl get crd clusterqueues.kueue.x-k8s.io",
@@ -128,8 +151,9 @@ STEPS = [
 INTRO = dict(title="kube-sched-advisor",
              lines=["Describe a workload in plain English. Get a scheduling plan from your live cluster.",
                     "Recorded on a real Amazon EKS cluster. No narration: each step has a caption.",
-                    "Every GPU is real: 4 NVIDIA A10G, one on each of four nodes."],
-             seconds=9)
+                    "4 real NVIDIA A10G GPUs, plus 3 stand-in nodes that advertise 8 GPUs each but have none.",
+                    "Every node is labelled real or stand-in on screen."],
+             seconds=11)
 OUTRO = dict(title="Read-only. Explains why. Generates the manifests.",
              lines=["github.com/mortezakiadi/kube-sched-advisor",
                     "Proposal to Kubernetes SIG Scheduling",
@@ -144,10 +168,10 @@ def sh(cmd: str, env: dict, timeout: int = 600) -> str:
 
 def build_redactor(env: dict):
     names = sh("kubectl get nodes -o jsonpath='{.items[*].metadata.name}'", env).split()
-    real = set(sh("kubectl get nodes -l ksa/real-gpu=true -o jsonpath='{.items[*].metadata.name}'", env).split())
+    real = set(sh("kubectl get nodes -l ksa/gpu-kind=real -o jsonpath='{.items[*].metadata.name}'", env).split())
     mapping = {}
     for kind, group in (("gpu-node", sorted(n for n in names if n in real)),
-                        ("node", sorted(n for n in names if n not in real))):
+                        ("standin-node", sorted(n for n in names if n not in real))):
         for i, n in enumerate(group):
             mapping[n] = f"{kind}-{i + 1}"
 

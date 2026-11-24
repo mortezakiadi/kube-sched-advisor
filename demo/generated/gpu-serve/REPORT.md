@@ -30,6 +30,9 @@
     "nodes": [
       "node-x",
       "node-x"
+    ],
+    "network_domains": [
+      "?"
     ]
   },
   "binpack_profile": {
@@ -37,6 +40,9 @@
     "nodes": [
       "node-x",
       "node-x"
+    ],
+    "network_domains": [
+      "?"
     ]
   },
   "gpu_fragmentation": {

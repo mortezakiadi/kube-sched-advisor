@@ -20,7 +20,7 @@
 - It runs as a **second** scheduler: the default scheduler is untouched (required on EKS, where the default scheduler's config cannot be edited).
 
 ## Findings
-- **BLOCKER - No B200 nodes found.** GPU models in the cluster: NVIDIA-A10G. Either relax the model or add a node pool (Karpenter NodePool / managed node group).
+- **BLOCKER - No B200 nodes found.** GPU models in the cluster: NVIDIA-A10G, NVIDIA-H100-80GB-HBM3. Either relax the model or add a node pool (Karpenter NodePool / managed node group).
 - **BLOCKER - No node can run even one pod.** `0/7 nodes are available: 7 Insufficient cpu.` Likely causes: requests larger than any node's free allocatable (requests, not real usage, are what count; right-size with VPA/Goldilocks).
 - **WARNING - The gang cannot start right now under any scoring strategy.** With gang scheduling the job simply waits (holding nothing) instead of half-starting. To start it sooner: add capacity (Karpenter NodePool / node group for this GPU type), drain stragglers off partially-used nodes (descheduler), or preempt lower-priority work via PriorityClass.
 - **NOTE - Coscheduling does not wake up when GPUs free up.** The plugin retries a waiting gang when a Pod or PodGroup is added or updated, or when the scheduler's periodic retry runs (every 5 minutes). Freed GPUs alone do not trigger a retry. To retry at once, touch the PodGroup, for example with `kubectl annotate podgroup <name> retry=$(date +%s) --overwrite`.
@@ -39,10 +39,10 @@
     "first_failure": "0/7 nodes are available: 7 Insufficient cpu."
   },
   "gpu_fragmentation": {
-    "free_gpus": 1.0,
-    "stranded_gpus": 0.0,
-    "fully_free_nodes": 1,
-    "stranded_ratio": 0.0
+    "free_gpus": 23.0,
+    "stranded_gpus": 6.0,
+    "fully_free_nodes": 3,
+    "stranded_ratio": 0.26
   }
 }
 ```

@@ -36,12 +36,18 @@
     "nodes": [
       "node-x"
     ],
+    "network_domains": [
+      "?"
+    ],
     "first_failure": "0/7 nodes are available: 4 Insufficient nvidia.com/gpu, 3 node(s) didn't match Pod's node affinity/selector."
   },
   "binpack_profile": {
     "placed": "1/3",
     "nodes": [
       "node-x"
+    ],
+    "network_domains": [
+      "?"
     ],
     "first_failure": "0/7 nodes are available: 4 Insufficient nvidia.com/gpu, 3 node(s) didn't match Pod's node affinity/selector."
   },

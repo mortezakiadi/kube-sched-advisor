@@ -1,0 +1,166 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gang-scheduler
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gang-scheduler-kube-scheduler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:kube-scheduler
+subjects:
+- kind: ServiceAccount
+  name: gang-scheduler
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gang-scheduler-volume-scheduler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:volume-scheduler
+subjects:
+- kind: ServiceAccount
+  name: gang-scheduler
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gang-scheduler-auth-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+- kind: ServiceAccount
+  name: gang-scheduler
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gang-scheduler-leader-election
+  namespace: kube-system
+rules:
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  resourceNames:
+  - gang-scheduler
+  verbs:
+  - get
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gang-scheduler-leader-election
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: gang-scheduler-leader-election
+subjects:
+- kind: ServiceAccount
+  name: gang-scheduler
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gang-scheduler-podgroups
+rules:
+- apiGroups:
+  - scheduling.x-k8s.io
+  resources:
+  - podgroups
+  - podgroups/status
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gang-scheduler-podgroups
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: gang-scheduler-podgroups
+subjects:
+- kind: ServiceAccount
+  name: gang-scheduler
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gang-scheduler-config
+  namespace: kube-system
+data:
+  config.yaml: "apiVersion: kubescheduler.config.k8s.io/v1\nkind: KubeSchedulerConfiguration\n\
+    leaderElection:\n  leaderElect: true\n  resourceName: gang-scheduler\n  resourceNamespace:\
+    \ kube-system\nprofiles:\n- schedulerName: gang-scheduler\n  pluginConfig:\n \
+    \ - name: NodeResourcesFit\n    args:\n      scoringStrategy:\n        type: MostAllocated\n\
+    \        resources:\n        - name: cpu\n          weight: 1\n        - name:\
+    \ memory\n          weight: 1\n        - name: nvidia.com/gpu\n          weight:\
+    \ 5\n  - name: Coscheduling\n    args:\n      permitWaitingTimeSeconds: 120\n\
+    \  plugins:\n    score:\n      enabled:\n      - name: ImageLocality\n       \
+    \ weight: 1\n    multiPoint:\n      enabled:\n      - name: Coscheduling\n   \
+    \   disabled:\n      - name: PrioritySort\n"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gang-scheduler
+  namespace: kube-system
+  labels:
+    component: gang-scheduler
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      component: gang-scheduler
+  template:
+    metadata:
+      labels:
+        component: gang-scheduler
+    spec:
+      serviceAccountName: gang-scheduler
+      priorityClassName: system-cluster-critical
+      containers:
+      - name: scheduler
+        image: registry.k8s.io/scheduler-plugins/kube-scheduler:v0.34.7
+        command:
+        - kube-scheduler
+        - --config=/etc/scheduler/config.yaml
+        - --v=3
+        volumeMounts:
+        - name: config
+          mountPath: /etc/scheduler
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+      volumes:
+      - name: config
+        configMap:
+          name: gang-scheduler-config
